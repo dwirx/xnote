@@ -57,6 +57,16 @@ jobs:
         choco install nsis -y --no-progress
       shell: pwsh
       
+    - name: Add NSIS to PATH
+      run: |
+        echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
+      shell: pwsh
+      
+    - name: Verify NSIS installation
+      run: |
+        makensis /VERSION
+      shell: cmd
+      
     - name: Get version from tag or input
       id: version
       run: |
