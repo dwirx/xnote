@@ -257,6 +257,11 @@ static LRESULT CALLBACK EditSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 static int g_nHoverTab = -1;
 static BOOL g_bHoverClose = FALSE;
 static BOOL g_bTrackingMouse = FALSE;
+
+/* Tab drag & drop state */
+static BOOL g_bDraggingTab = FALSE;
+static int g_nDragSourceTab = -1;
+static int g_nDragTargetTab = -1;
 /* Original tab control window procedure */
 static WNDPROC g_OrigTabProc = NULL;
 
@@ -295,6 +300,92 @@ static BOOL IsPointInCloseButton(HWND hwndTab, int nTab, POINT pt) {
     return PtInRect(&rcClose, pt);
 }
 
+/* Predefined group colors */
+static COLORREF g_GroupColors[] = {
+    RGB(66, 133, 244),   /* Blue */
+    RGB(52, 168, 83),    /* Green */
+    RGB(251, 188, 4),    /* Yellow */
+    RGB(234, 67, 53),    /* Red */
+    RGB(154, 66, 244),   /* Purple */
+    RGB(255, 112, 67),   /* Orange */
+    RGB(0, 172, 193),    /* Cyan */
+    RGB(233, 30, 99),    /* Pink */
+};
+#define NUM_GROUP_COLORS (sizeof(g_GroupColors) / sizeof(g_GroupColors[0]))
+
+/* Calculate group ID from file path (hash of parent folder) */
+static int CalculateGroupId(const TCHAR* szFileName) {
+    if (!szFileName || !szFileName[0]) return 0;
+    
+    /* Find last backslash to get parent folder */
+    const TCHAR* pLastSlash = _tcsrchr(szFileName, TEXT('\\'));
+    if (!pLastSlash) return 0;
+    
+    /* Calculate simple hash of parent folder path */
+    int nHash = 0;
+    for (const TCHAR* p = szFileName; p < pLastSlash; p++) {
+        nHash = nHash * 31 + (int)(*p);
+    }
+    return nHash;
+}
+
+/* Get group color based on group ID */
+static COLORREF GetGroupColor(int nGroupId) {
+    if (nGroupId == 0) return RGB(100, 100, 100); /* Default gray for untitled */
+    int nIndex = ((unsigned int)nGroupId) % NUM_GROUP_COLORS;
+    return g_GroupColors[nIndex];
+}
+
+/* Update tab group info based on file path */
+void UpdateTabGroup(int nTabIndex) {
+    if (nTabIndex < 0 || nTabIndex >= g_AppState.nTabCount) return;
+    
+    TabState* pTab = &g_AppState.tabs[nTabIndex];
+    if (pTab->bUntitled || !pTab->szFileName[0]) {
+        pTab->nGroupId = 0;
+        pTab->crGroupColor = RGB(100, 100, 100);
+    } else {
+        pTab->nGroupId = CalculateGroupId(pTab->szFileName);
+        pTab->crGroupColor = GetGroupColor(pTab->nGroupId);
+    }
+}
+
+/* Swap two tabs */
+static void SwapTabs(int nTab1, int nTab2) {
+    if (nTab1 < 0 || nTab1 >= g_AppState.nTabCount) return;
+    if (nTab2 < 0 || nTab2 >= g_AppState.nTabCount) return;
+    if (nTab1 == nTab2) return;
+    
+    /* Swap tab states */
+    TabState temp = g_AppState.tabs[nTab1];
+    g_AppState.tabs[nTab1] = g_AppState.tabs[nTab2];
+    g_AppState.tabs[nTab2] = temp;
+    
+    /* Update tab control titles */
+    TCHAR szText1[MAX_PATH], szText2[MAX_PATH];
+    TCITEM tci = {0};
+    tci.mask = TCIF_TEXT;
+    tci.pszText = szText1;
+    tci.cchTextMax = MAX_PATH;
+    TabCtrl_GetItem(g_AppState.hwndTab, nTab1, &tci);
+    
+    tci.pszText = szText2;
+    TabCtrl_GetItem(g_AppState.hwndTab, nTab2, &tci);
+    
+    tci.pszText = szText1;
+    TabCtrl_SetItem(g_AppState.hwndTab, nTab2, &tci);
+    
+    tci.pszText = szText2;
+    TabCtrl_SetItem(g_AppState.hwndTab, nTab1, &tci);
+    
+    /* Update current tab index if needed */
+    if (g_AppState.nCurrentTab == nTab1) {
+        g_AppState.nCurrentTab = nTab2;
+    } else if (g_AppState.nCurrentTab == nTab2) {
+        g_AppState.nCurrentTab = nTab1;
+    }
+}
+
 /* Subclassed tab control procedure to catch mouse events */
 static LRESULT CALLBACK TabSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -312,14 +403,27 @@ static LRESULT CALLBACK TabSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 g_bTrackingMouse = TRUE;
             }
             
+            TCHITTESTINFO htInfo;
+            htInfo.pt = pt;
+            int nTab = TabCtrl_HitTest(hwnd, &htInfo);
+            
+            /* Handle tab dragging */
+            if (g_bDraggingTab && g_nDragSourceTab >= 0) {
+                if (nTab >= 0 && nTab != g_nDragSourceTab) {
+                    /* Swap tabs as we drag */
+                    SwapTabs(g_nDragSourceTab, nTab);
+                    g_nDragSourceTab = nTab;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                }
+                /* Set drag cursor */
+                SetCursor(LoadCursor(NULL, IDC_HAND));
+                return 0;
+            }
+            
             int nOldHoverTab = g_nHoverTab;
             BOOL bOldHoverClose = g_bHoverClose;
             g_nHoverTab = -1;
             g_bHoverClose = FALSE;
-            
-            TCHITTESTINFO htInfo;
-            htInfo.pt = pt;
-            int nTab = TabCtrl_HitTest(hwnd, &htInfo);
             
             if (IsPointInCloseButton(hwnd, nTab, pt)) {
                 g_nHoverTab = nTab;
@@ -362,12 +466,29 @@ static LRESULT CALLBACK TabSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 DebugLog("[WM_LBUTTONDOWN] CloseTab returned, tabCount now=%d", g_AppState.nTabCount);
                 return 0;  /* Prevent default tab selection behavior */
             }
+            
+            /* Start tab dragging if clicking on a tab (not close button) */
+            if (nTab >= 0 && g_AppState.nTabCount > 1) {
+                g_bDraggingTab = TRUE;
+                g_nDragSourceTab = nTab;
+                SetCapture(hwnd);
+            }
+            
             DebugLog("[WM_LBUTTONDOWN] Not on close button, passing to default handler");
             /* Fall through to default handler for normal tab selection */
             break;
         }
         
         case WM_LBUTTONUP: {
+            /* End tab dragging */
+            if (g_bDraggingTab) {
+                g_bDraggingTab = FALSE;
+                g_nDragSourceTab = -1;
+                g_nDragTargetTab = -1;
+                ReleaseCapture();
+                SetCursor(LoadCursor(NULL, IDC_ARROW));
+            }
+            
             /* Consume LBUTTONUP if it's on close button to prevent further processing */
             /* Note: The actual close is handled in WM_LBUTTONDOWN for immediate response */
             POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
@@ -380,6 +501,14 @@ static LRESULT CALLBACK TabSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 /* Just consume the event - don't close again (already closed on LBUTTONDOWN) */
                 return 0;
             }
+            break;
+        }
+        
+        case WM_CAPTURECHANGED: {
+            /* Cancel drag if capture is lost */
+            g_bDraggingTab = FALSE;
+            g_nDragSourceTab = -1;
+            g_nDragTargetTab = -1;
             break;
         }
         
@@ -446,6 +575,13 @@ void InitTabState(TabState* pState) {
 
     /* Initialize multi-cursor state */
     MultiCursor_Init(&pState->multiCursor);
+    
+    /* Initialize per-tab zoom level */
+    pState->nZoomLevel = 100;                /* Default 100% zoom */
+    
+    /* Initialize tab group */
+    pState->nGroupId = 0;                    /* No group by default */
+    pState->crGroupColor = RGB(100, 100, 100); /* Default gray */
 }
 
 /* Get current multi-cursor state */
@@ -895,6 +1031,9 @@ void SwitchToTab(HWND hwnd, int nTabIndex) {
             ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
             pTab->bNeedsSyntaxRefresh = FALSE;
         }
+        
+        /* Apply per-tab zoom level */
+        ApplyTabZoom(hwnd, nTabIndex);
     }
     
     /* Re-enable redraw */
@@ -1068,11 +1207,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                           IsAutoFormatJsonEnabled() ? MF_CHECKED : MF_UNCHECKED);
             CheckMenuItem(hMenu, IDM_VIEW_STAYONTOP, 
                           IsStayOnTopEnabled() ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_FILE_AUTOSAVE, 
+                          IsAutoSaveEnabled() ? MF_CHECKED : MF_UNCHECKED);
             
             /* Apply stay on top state if enabled */
             if (IsStayOnTopEnabled()) {
                 SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
             }
+            
+            /* Start auto-save timer if enabled */
+            if (IsAutoSaveEnabled()) {
+                SetTimer(hwnd, TIMER_AUTOSAVE_FILE, GetAutoSaveInterval() * 1000, NULL);
+            }
+            
+            /* Update recent files menu */
+            UpdateRecentFilesMenu(hwnd);
             
             /* Start periodic sync timer for line numbers if enabled */
             if (g_AppState.bShowLineNumbers) {
@@ -1135,6 +1284,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             } else if (wParam == TIMER_AUTOSAVE) {
                 /* Auto-save session periodically */
                 HandleSessionTimer(hwnd);
+            } else if (wParam == TIMER_AUTOSAVE_FILE) {
+                /* Auto-save modified files */
+                AutoSaveAllModified(hwnd);
             }
             return 0;
         }
@@ -1200,6 +1352,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 tci.pszText = szText;
                 tci.cchTextMax = MAX_PATH;
                 TabCtrl_GetItem(g_AppState.hwndTab, pDIS->itemID, &tci);
+                
+                /* Draw tab group color indicator (left border) */
+                if (pDIS->itemID < (UINT)g_AppState.nTabCount) {
+                    TabState* pTabDraw = &g_AppState.tabs[pDIS->itemID];
+                    if (pTabDraw->nGroupId != 0) {
+                        RECT rcGroup = rc;
+                        rcGroup.right = rcGroup.left + 4;
+                        HBRUSH hGroupBrush = CreateSolidBrush(pTabDraw->crGroupColor);
+                        FillRect(pDIS->hDC, &rcGroup, hGroupBrush);
+                        DeleteObject(hGroupBrush);
+                    }
+                }
                 
                 /* Draw active tab indicator line (top border) */
                 if (bSelected) {
@@ -1297,6 +1461,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     break;
                 case IDM_FILE_EXIT:
                     SendMessage(hwnd, WM_CLOSE, 0, 0);
+                    break;
+                
+                case IDM_FILE_AUTOSAVE:
+                    ToggleAutoSave(hwnd);
+                    break;
+                
+                /* Recent files */
+                case IDM_FILE_RECENT_1:
+                case IDM_FILE_RECENT_2:
+                case IDM_FILE_RECENT_3:
+                case IDM_FILE_RECENT_4:
+                case IDM_FILE_RECENT_5:
+                case IDM_FILE_RECENT_6:
+                case IDM_FILE_RECENT_7:
+                case IDM_FILE_RECENT_8:
+                case IDM_FILE_RECENT_9:
+                case IDM_FILE_RECENT_10:
+                    OpenRecentFile(hwnd, LOWORD(wParam) - IDM_FILE_RECENT_1);
                     break;
 
                 /* Edit menu */
@@ -1417,6 +1599,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 
                 case IDM_VIEW_STAYONTOP:
                     ToggleStayOnTop(hwnd);
+                    break;
+                
+                case IDM_VIEW_DISTRACTION_FREE:
+                    ToggleDistractionFreeMode(hwnd);
+                    break;
+                
+                case IDM_VIEW_ZEN_MODE:
+                    ToggleZenMode(hwnd);
                     break;
                 
                 /* Theme selection */
@@ -1671,6 +1861,294 @@ void ToggleStayOnTop(HWND hwnd) {
     
     /* Mark session dirty */
     MarkSessionDirty();
+}
+
+/* Auto-save all modified files */
+void AutoSaveAllModified(HWND hwnd) {
+    for (int i = 0; i < g_AppState.nTabCount; i++) {
+        TabState* pTab = &g_AppState.tabs[i];
+        /* Only save files that have a name (not untitled) and are modified */
+        if (pTab->bModified && !pTab->bUntitled && pTab->szFileName[0]) {
+            if (WriteFileContent(pTab->hwndEdit, pTab->szFileName)) {
+                pTab->bModified = FALSE;
+                UpdateTabTitle(i);
+            }
+        }
+    }
+    UpdateWindowTitle(hwnd);
+}
+
+/* Toggle auto-save mode */
+void ToggleAutoSave(HWND hwnd) {
+    BOOL bEnabled = !IsAutoSaveEnabled();
+    SetAutoSave(bEnabled);
+    
+    /* Update menu check mark */
+    HMENU hMenu = GetMenu(hwnd);
+    CheckMenuItem(hMenu, IDM_FILE_AUTOSAVE, 
+                  bEnabled ? MF_CHECKED : MF_UNCHECKED);
+    
+    /* Start or stop auto-save timer */
+    if (bEnabled) {
+        SetTimer(hwnd, TIMER_AUTOSAVE_FILE, GetAutoSaveInterval() * 1000, NULL);
+    } else {
+        KillTimer(hwnd, TIMER_AUTOSAVE_FILE);
+    }
+    
+    /* Mark session dirty */
+    MarkSessionDirty();
+}
+
+/* Update recent files menu */
+void UpdateRecentFilesMenu(HWND hwnd) {
+    HMENU hMenu = GetMenu(hwnd);
+    HMENU hFileMenu = GetSubMenu(hMenu, 0); /* File menu is first */
+    
+    /* Find Recent Files submenu */
+    int nCount = GetMenuItemCount(hFileMenu);
+    HMENU hRecentMenu = NULL;
+    for (int i = 0; i < nCount; i++) {
+        HMENU hSub = GetSubMenu(hFileMenu, i);
+        if (hSub) {
+            TCHAR szText[64];
+            GetMenuString(hFileMenu, i, szText, 64, MF_BYPOSITION);
+            if (_tcsstr(szText, TEXT("Recent")) != NULL) {
+                hRecentMenu = hSub;
+                break;
+            }
+        }
+    }
+    
+    if (!hRecentMenu) return;
+    
+    /* Clear existing items */
+    while (GetMenuItemCount(hRecentMenu) > 0) {
+        DeleteMenu(hRecentMenu, 0, MF_BYPOSITION);
+    }
+    
+    /* Add recent files */
+    int nRecentCount = GetRecentFileCount();
+    if (nRecentCount == 0) {
+        AppendMenu(hRecentMenu, MF_STRING | MF_GRAYED, IDM_FILE_RECENT_1, TEXT("(Empty)"));
+    } else {
+        for (int i = 0; i < nRecentCount && i < 10; i++) {
+            const TCHAR* szFile = GetRecentFile(i);
+            if (szFile) {
+                /* Show only filename, not full path */
+                const TCHAR* pName = _tcsrchr(szFile, TEXT('\\'));
+                if (pName) pName++; else pName = szFile;
+                
+                TCHAR szMenuItem[MAX_PATH + 10];
+                _sntprintf(szMenuItem, MAX_PATH + 10, TEXT("&%d %s"), i + 1, pName);
+                AppendMenu(hRecentMenu, MF_STRING, IDM_FILE_RECENT_1 + i, szMenuItem);
+            }
+        }
+    }
+}
+
+/* Open a recent file by index */
+void OpenRecentFile(HWND hwnd, int nIndex) {
+    const TCHAR* szFile = GetRecentFile(nIndex);
+    if (!szFile) return;
+    
+    /* Check if file exists */
+    if (GetFileAttributes(szFile) == INVALID_FILE_ATTRIBUTES) {
+        ShowErrorDialog(hwnd, TEXT("File not found."));
+        return;
+    }
+    
+    /* Check if file is already open */
+    for (int i = 0; i < g_AppState.nTabCount; i++) {
+        if (_tcsicmp(g_AppState.tabs[i].szFileName, szFile) == 0) {
+            SwitchToTab(hwnd, i);
+            return;
+        }
+    }
+    
+    /* Open in new tab or current if untitled and empty */
+    TabState* pTab = GetCurrentTabState();
+    if (pTab && pTab->bUntitled && !pTab->bModified) {
+        _tcscpy(pTab->szFileName, szFile);
+        pTab->bUntitled = FALSE;
+        if (ReadFileContent(pTab->hwndEdit, pTab->szFileName)) {
+            pTab->bModified = FALSE;
+            pTab->language = DetectLanguage(pTab->szFileName);
+            if (g_bSyntaxHighlight) {
+                ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
+            }
+            UpdateTabGroup(g_AppState.nCurrentTab);
+            UpdateTabTitle(g_AppState.nCurrentTab);
+            UpdateWindowTitle(hwnd);
+            AddRecentFile(pTab->szFileName);
+        }
+    } else {
+        /* Open in new tab */
+        const TCHAR* pName = _tcsrchr(szFile, TEXT('\\'));
+        if (pName) pName++; else pName = szFile;
+        int nTab = AddNewTab(hwnd, pName);
+        if (nTab >= 0) {
+            pTab = &g_AppState.tabs[nTab];
+            _tcscpy(pTab->szFileName, szFile);
+            pTab->bUntitled = FALSE;
+            if (ReadFileContent(pTab->hwndEdit, pTab->szFileName)) {
+                pTab->bModified = FALSE;
+                pTab->language = DetectLanguage(pTab->szFileName);
+                if (g_bSyntaxHighlight) {
+                    ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
+                }
+                UpdateTabGroup(nTab);
+                UpdateTabTitle(nTab);
+                UpdateWindowTitle(hwnd);
+                AddRecentFile(pTab->szFileName);
+            }
+        }
+    }
+}
+
+/* Distraction free mode state */
+static BOOL g_bDistractionFreeMode = FALSE;
+static RECT g_rcNormalWindow = {0};
+static LONG g_dwNormalStyle = 0;
+static LONG g_dwNormalExStyle = 0;
+
+/* Zen mode state (windowed focus mode) */
+static BOOL g_bZenMode = FALSE;
+
+/* Check if distraction free mode is enabled */
+BOOL IsDistractionFreeModeEnabled(void) {
+    return g_bDistractionFreeMode;
+}
+
+/* Check if zen mode is enabled */
+BOOL IsZenModeEnabled(void) {
+    return g_bZenMode;
+}
+
+/* Toggle distraction free mode (fullscreen without UI) */
+void ToggleDistractionFreeMode(HWND hwnd) {
+    g_bDistractionFreeMode = !g_bDistractionFreeMode;
+    
+    if (g_bDistractionFreeMode) {
+        /* Save current window state */
+        GetWindowRect(hwnd, &g_rcNormalWindow);
+        g_dwNormalStyle = GetWindowLong(hwnd, GWL_STYLE);
+        g_dwNormalExStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+        
+        /* Hide menu, status bar, and tab bar */
+        SetMenu(hwnd, NULL);
+        ShowWindow(g_AppState.hwndStatus, SW_HIDE);
+        ShowWindow(g_AppState.hwndTab, SW_HIDE);
+        
+        /* Remove window decorations */
+        SetWindowLong(hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+        SetWindowLong(hwnd, GWL_EXSTYLE, WS_EX_TOPMOST);
+        
+        /* Go fullscreen */
+        HMONITOR hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi = {sizeof(mi)};
+        GetMonitorInfo(hMon, &mi);
+        SetWindowPos(hwnd, HWND_TOPMOST, 
+                     mi.rcMonitor.left, mi.rcMonitor.top,
+                     mi.rcMonitor.right - mi.rcMonitor.left,
+                     mi.rcMonitor.bottom - mi.rcMonitor.top,
+                     SWP_FRAMECHANGED);
+    } else {
+        /* Restore menu, status bar, and tab bar */
+        SetMenu(hwnd, LoadMenu(g_AppState.hInstance, MAKEINTRESOURCE(IDR_MAINMENU)));
+        ShowWindow(g_AppState.hwndStatus, SW_SHOW);
+        ShowWindow(g_AppState.hwndTab, SW_SHOW);
+        
+        /* Restore window style */
+        SetWindowLong(hwnd, GWL_STYLE, g_dwNormalStyle);
+        SetWindowLong(hwnd, GWL_EXSTYLE, g_dwNormalExStyle);
+        
+        /* Restore window position */
+        SetWindowPos(hwnd, IsStayOnTopEnabled() ? HWND_TOPMOST : HWND_NOTOPMOST,
+                     g_rcNormalWindow.left, g_rcNormalWindow.top,
+                     g_rcNormalWindow.right - g_rcNormalWindow.left,
+                     g_rcNormalWindow.bottom - g_rcNormalWindow.top,
+                     SWP_FRAMECHANGED);
+        
+        /* Reinitialize menu checkmarks */
+        HMENU hMenu = GetMenu(hwnd);
+        CheckMenuItem(hMenu, IDM_VIEW_LINENUMBERS, g_AppState.bShowLineNumbers ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_VIEW_RELATIVENUM, g_AppState.bRelativeLineNumbers ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_FORMAT_WORDWRAP, g_AppState.bWordWrap ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_VIEW_SYNTAX, g_bSyntaxHighlight ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_AUTO_FORMAT_JSON, IsAutoFormatJsonEnabled() ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_VIEW_STAYONTOP, IsStayOnTopEnabled() ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_FILE_AUTOSAVE, IsAutoSaveEnabled() ? MF_CHECKED : MF_UNCHECKED);
+        UpdateRecentFilesMenu(hwnd);
+    }
+    
+    /* Reposition controls */
+    RepositionControls(hwnd);
+    
+    /* Update menu check mark */
+    HMENU hMenu = GetMenu(hwnd);
+    if (hMenu) {
+        CheckMenuItem(hMenu, IDM_VIEW_DISTRACTION_FREE, 
+                      g_bDistractionFreeMode ? MF_CHECKED : MF_UNCHECKED);
+    }
+}
+
+/* Toggle zen mode (windowed focus mode - hides UI but keeps window) */
+void ToggleZenMode(HWND hwnd) {
+    /* If distraction free mode is on, turn it off first */
+    if (g_bDistractionFreeMode) {
+        ToggleDistractionFreeMode(hwnd);
+    }
+    
+    g_bZenMode = !g_bZenMode;
+    
+    if (g_bZenMode) {
+        /* Hide menu, status bar, and tab bar but keep window frame */
+        SetMenu(hwnd, NULL);
+        ShowWindow(g_AppState.hwndStatus, SW_HIDE);
+        ShowWindow(g_AppState.hwndTab, SW_HIDE);
+        
+        /* Also hide line numbers for cleaner look */
+        for (int i = 0; i < g_AppState.nTabCount; i++) {
+            if (g_AppState.tabs[i].lineNumState.hwndLineNumbers) {
+                ShowWindow(g_AppState.tabs[i].lineNumState.hwndLineNumbers, SW_HIDE);
+            }
+        }
+    } else {
+        /* Restore menu, status bar, and tab bar */
+        SetMenu(hwnd, LoadMenu(g_AppState.hInstance, MAKEINTRESOURCE(IDR_MAINMENU)));
+        ShowWindow(g_AppState.hwndStatus, SW_SHOW);
+        ShowWindow(g_AppState.hwndTab, SW_SHOW);
+        
+        /* Restore line numbers if enabled */
+        if (g_AppState.bShowLineNumbers) {
+            TabState* pTab = GetCurrentTabState();
+            if (pTab && pTab->lineNumState.hwndLineNumbers) {
+                ShowWindow(pTab->lineNumState.hwndLineNumbers, SW_SHOW);
+            }
+        }
+        
+        /* Reinitialize menu checkmarks */
+        HMENU hMenu = GetMenu(hwnd);
+        CheckMenuItem(hMenu, IDM_VIEW_LINENUMBERS, g_AppState.bShowLineNumbers ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_VIEW_RELATIVENUM, g_AppState.bRelativeLineNumbers ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_FORMAT_WORDWRAP, g_AppState.bWordWrap ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_VIEW_SYNTAX, g_bSyntaxHighlight ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_AUTO_FORMAT_JSON, IsAutoFormatJsonEnabled() ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_VIEW_STAYONTOP, IsStayOnTopEnabled() ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_FILE_AUTOSAVE, IsAutoSaveEnabled() ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem(hMenu, IDM_VIEW_ZEN_MODE, MF_UNCHECKED);
+        UpdateRecentFilesMenu(hwnd);
+    }
+    
+    /* Reposition controls */
+    RepositionControls(hwnd);
+    
+    /* Update menu check mark */
+    HMENU hMenu = GetMenu(hwnd);
+    if (hMenu) {
+        CheckMenuItem(hMenu, IDM_VIEW_ZEN_MODE, 
+                      g_bZenMode ? MF_CHECKED : MF_UNCHECKED);
+    }
 }
 
 /* Toggle word wrap on/off */

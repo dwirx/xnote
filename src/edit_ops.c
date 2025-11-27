@@ -398,13 +398,68 @@ void SetZoomLevel(HWND hwnd, int nLevel) {
 }
 
 void ZoomIn(HWND hwnd) {
-    SetZoomLevel(hwnd, g_nZoomLevel + 10);
+    /* Use per-tab zoom */
+    int nTab = g_AppState.nCurrentTab;
+    if (nTab >= 0 && nTab < g_AppState.nTabCount) {
+        SetTabZoomLevel(hwnd, nTab, g_AppState.tabs[nTab].nZoomLevel + 10);
+    }
 }
 
 void ZoomOut(HWND hwnd) {
-    SetZoomLevel(hwnd, g_nZoomLevel - 10);
+    /* Use per-tab zoom */
+    int nTab = g_AppState.nCurrentTab;
+    if (nTab >= 0 && nTab < g_AppState.nTabCount) {
+        SetTabZoomLevel(hwnd, nTab, g_AppState.tabs[nTab].nZoomLevel - 10);
+    }
 }
 
 void ZoomReset(HWND hwnd) {
-    SetZoomLevel(hwnd, 100);
+    /* Use per-tab zoom */
+    int nTab = g_AppState.nCurrentTab;
+    if (nTab >= 0 && nTab < g_AppState.nTabCount) {
+        SetTabZoomLevel(hwnd, nTab, 100);
+    }
+}
+
+/* Per-tab zoom functions */
+int GetTabZoomLevel(int nTabIndex) {
+    if (nTabIndex >= 0 && nTabIndex < g_AppState.nTabCount) {
+        return g_AppState.tabs[nTabIndex].nZoomLevel;
+    }
+    return 100;
+}
+
+void SetTabZoomLevel(HWND hwnd, int nTabIndex, int nLevel) {
+    if (nTabIndex < 0 || nTabIndex >= g_AppState.nTabCount) return;
+    
+    if (nLevel < 50) nLevel = 50;
+    if (nLevel > 300) nLevel = 300;
+    
+    g_AppState.tabs[nTabIndex].nZoomLevel = nLevel;
+    
+    /* Apply zoom to this tab's edit control */
+    ApplyTabZoom(hwnd, nTabIndex);
+    
+    /* Update status bar */
+    UpdateStatusBar(hwnd);
+}
+
+void ApplyTabZoom(HWND hwnd, int nTabIndex) {
+    if (nTabIndex < 0 || nTabIndex >= g_AppState.nTabCount) return;
+    
+    TabState* pTab = &g_AppState.tabs[nTabIndex];
+    if (!pTab->hwndEdit) return;
+    
+    int nFontSize = (g_nBaseFontSize * pTab->nZoomLevel) / 100;
+    
+    HFONT hNewFont = CreateFont(
+        nFontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, FIXED_PITCH | FF_MODERN, TEXT("Consolas")
+    );
+    
+    if (hNewFont) {
+        SendMessage(pTab->hwndEdit, WM_SETFONT, (WPARAM)hNewFont, TRUE);
+    }
+    (void)hwnd; /* Suppress unused warning */
 }

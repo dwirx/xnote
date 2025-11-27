@@ -1423,6 +1423,9 @@ BOOL FileOpen(HWND hwnd) {
         SetWindowText(g_AppState.hwndStatus, szInfo);
     }
 
+    /* Update tab group based on file path */
+    UpdateTabGroup(g_AppState.nCurrentTab);
+    
     /* Update status bar with file info - this will call GetWindowTextLength but it's ok now */
     UpdateStatusBar(hwnd);
 

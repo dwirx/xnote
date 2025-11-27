@@ -56,6 +56,19 @@ IDI_APPICON ICON "icons/xnote.ico"
 #define IDM_VIEW_ZOOMOUT    266
 #define IDM_VIEW_ZOOMRESET  267
 #define IDM_VIEW_STAYONTOP  269
+#define IDM_VIEW_DISTRACTION_FREE 282
+#define IDM_VIEW_ZEN_MODE   283
+#define IDM_FILE_AUTOSAVE   121
+#define IDM_FILE_RECENT_1   130
+#define IDM_FILE_RECENT_2   131
+#define IDM_FILE_RECENT_3   132
+#define IDM_FILE_RECENT_4   133
+#define IDM_FILE_RECENT_5   134
+#define IDM_FILE_RECENT_6   135
+#define IDM_FILE_RECENT_7   136
+#define IDM_FILE_RECENT_8   137
+#define IDM_FILE_RECENT_9   138
+#define IDM_FILE_RECENT_10  139
 #define IDM_THEME_LIGHT         270
 #define IDM_THEME_DARK          271
 #define IDM_THEME_TOKYO_NIGHT   272
@@ -89,6 +102,13 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "Next Tab\tCtrl+Tab",      IDM_TAB_NEXT
         MENUITEM "Previous Tab\tCtrl+Shift+Tab", IDM_TAB_PREV
+        MENUITEM SEPARATOR
+        MENUITEM "&Auto Save",              IDM_FILE_AUTOSAVE
+        MENUITEM SEPARATOR
+        POPUP "Recent &Files"
+        BEGIN
+            MENUITEM "(Empty)",             IDM_FILE_RECENT_1, GRAYED
+        END
         MENUITEM SEPARATOR
         MENUITEM "E&xit\tAlt+F4",           IDM_FILE_EXIT
     END
@@ -157,6 +177,9 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "&Vim Mode\tCtrl+Shift+V", IDM_VIEW_VIMMODE
         MENUITEM "Stay on &Top\tCtrl+Shift+T", IDM_VIEW_STAYONTOP
+        MENUITEM SEPARATOR
+        MENUITEM "&Distraction Free\tF11", IDM_VIEW_DISTRACTION_FREE
+        MENUITEM "&Zen Mode\tCtrl+K Z", IDM_VIEW_ZEN_MODE
     END
     POPUP "&Help"
     BEGIN
@@ -225,6 +248,12 @@ BEGIN
     
     /* Help */
     VK_F1,  IDM_HELP_CONTENTS,  VIRTKEY
+    
+    /* Distraction free mode */
+    VK_F11, IDM_VIEW_DISTRACTION_FREE, VIRTKEY
+    
+    /* Zen mode - Ctrl+K Z (we'll use Ctrl+Shift+Z as alternative) */
+    "Z",    IDM_VIEW_ZEN_MODE, VIRTKEY, CONTROL, ALT
 END
 
 /* Find/Replace Dialog IDs */

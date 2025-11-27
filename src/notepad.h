@@ -108,6 +108,13 @@ typedef struct {
 
     /* Multi-cursor support */
     MultiCursorState multiCursor; /* Multi-cursor state for this tab */
+    
+    /* Per-tab zoom level */
+    int nZoomLevel;              /* Zoom level for this tab (100 = 100%) */
+    
+    /* Tab group (based on folder) */
+    int nGroupId;                /* Group ID (hash of parent folder) */
+    COLORREF crGroupColor;       /* Group color for visual distinction */
 } TabState;
 
 /* Application state structure */
@@ -170,6 +177,9 @@ void SetZoomLevel(HWND hwnd, int nLevel);
 void ZoomIn(HWND hwnd);
 void ZoomOut(HWND hwnd);
 void ZoomReset(HWND hwnd);
+int GetTabZoomLevel(int nTabIndex);
+void SetTabZoomLevel(HWND hwnd, int nTabIndex, int nLevel);
+void ApplyTabZoom(HWND hwnd, int nTabIndex);
 
 /* Dialog operations */
 BOOL ShowOpenDialog(HWND hwnd, TCHAR* szFileName, DWORD nMaxFile);
@@ -250,6 +260,22 @@ void SetAutoFormatJson(BOOL bEnabled);
 BOOL IsStayOnTopEnabled(void);
 void SetStayOnTop(BOOL bEnabled);
 void ToggleStayOnTop(HWND hwnd);
+BOOL IsAutoSaveEnabled(void);
+void SetAutoSave(BOOL bEnabled);
+int GetAutoSaveInterval(void);
+void SetAutoSaveInterval(int nSeconds);
+void ToggleAutoSave(HWND hwnd);
+void AutoSaveAllModified(HWND hwnd);
+void UpdateRecentFilesMenu(HWND hwnd);
+void OpenRecentFile(HWND hwnd, int nIndex);
+int GetRecentFileCount(void);
+const TCHAR* GetRecentFile(int index);
+void AddRecentFile(const TCHAR* szFileName);
+void ToggleDistractionFreeMode(HWND hwnd);
+BOOL IsDistractionFreeModeEnabled(void);
+void ToggleZenMode(HWND hwnd);
+BOOL IsZenModeEnabled(void);
+void UpdateTabGroup(int nTabIndex);
 
 /* Drag and Drop operations */
 void DragDrop_Enable(HWND hwnd);

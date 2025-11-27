@@ -77,6 +77,22 @@
 
 /* Timer IDs */
 #define TIMER_STATUSBAR     4
+#define TIMER_AUTOSAVE_FILE 5
+
+/* Auto-save menu command ID */
+#define IDM_FILE_AUTOSAVE   121
+
+/* Recent files menu command IDs */
+#define IDM_FILE_RECENT_1   130
+#define IDM_FILE_RECENT_2   131
+#define IDM_FILE_RECENT_3   132
+#define IDM_FILE_RECENT_4   133
+#define IDM_FILE_RECENT_5   134
+#define IDM_FILE_RECENT_6   135
+#define IDM_FILE_RECENT_7   136
+#define IDM_FILE_RECENT_8   137
+#define IDM_FILE_RECENT_9   138
+#define IDM_FILE_RECENT_10  139
 
 /* Tab navigation command IDs */
 #define IDM_TAB_NEXT        108
@@ -108,6 +124,8 @@
 #define IDM_VIEW_ZOOMRESET  267
 #define IDM_VIEW_FULLSCREEN 268
 #define IDM_VIEW_STAYONTOP  269
+#define IDM_VIEW_DISTRACTION_FREE 282
+#define IDM_VIEW_ZEN_MODE   283
 
 /* JSON formatter command IDs */
 #define IDM_FORMAT_JSON         253

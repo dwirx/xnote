@@ -570,12 +570,15 @@ void RepositionControls(HWND hwnd) {
     /* Minimum size check */
     if (rc.right < 100 || rc.bottom < 100) return;
     
-    /* Tab control at top */
-    int nTabHeight = TAB_HEIGHT;
+    /* Check if in zen mode or distraction free mode */
+    BOOL bZenOrDistraction = IsZenModeEnabled() || IsDistractionFreeModeEnabled();
     
-    /* Get status bar height */
+    /* Tab control at top (hidden in zen/distraction mode) */
+    int nTabHeight = bZenOrDistraction ? 0 : TAB_HEIGHT;
+    
+    /* Get status bar height (hidden in zen/distraction mode) */
     int nStatusHeight = 0;
-    if (g_AppState.hwndStatus) {
+    if (g_AppState.hwndStatus && !bZenOrDistraction) {
         RECT rcStatus;
         GetWindowRect(g_AppState.hwndStatus, &rcStatus);
         nStatusHeight = rcStatus.bottom - rcStatus.top;
@@ -592,9 +595,11 @@ void RepositionControls(HWND hwnd) {
     HDWP hdwp = BeginDeferWindowPos(4);
     if (!hdwp) {
         /* Fallback to regular MoveWindow */
-        MoveWindow(g_AppState.hwndTab, 0, 0, rc.right, nTabHeight, FALSE);
+        if (!bZenOrDistraction) {
+            MoveWindow(g_AppState.hwndTab, 0, 0, rc.right, nTabHeight, FALSE);
+        }
         
-        if (g_AppState.hwndStatus) {
+        if (g_AppState.hwndStatus && !bZenOrDistraction) {
             SendMessage(g_AppState.hwndStatus, WM_SIZE, 0, 0);
         }
         
@@ -603,7 +608,7 @@ void RepositionControls(HWND hwnd) {
             int nEditLeft = 0;
             int nEditWidth = rc.right;
             
-            if (g_AppState.bShowLineNumbers && pTab->lineNumState.hwndLineNumbers) {
+            if (g_AppState.bShowLineNumbers && pTab->lineNumState.hwndLineNumbers && !bZenOrDistraction) {
                 int nLineNumWidth = pTab->lineNumState.nLineNumberWidth;
                 if (nLineNumWidth <= 0) nLineNumWidth = DEFAULT_LINE_NUM_WIDTH;
                 /* Position at same Y as edit control - we'll handle alignment in paint */
@@ -634,7 +639,8 @@ void RepositionControls(HWND hwnd) {
     int nEditLeft = 0;
     int nEditWidth = rc.right;
     
-    if (g_AppState.bShowLineNumbers && pTab->lineNumState.hwndLineNumbers) {
+    /* Show line numbers only if enabled AND not in zen/distraction mode */
+    if (g_AppState.bShowLineNumbers && pTab->lineNumState.hwndLineNumbers && !bZenOrDistraction) {
         int nLineNumWidth = pTab->lineNumState.nLineNumberWidth;
         if (nLineNumWidth <= 0) nLineNumWidth = DEFAULT_LINE_NUM_WIDTH;
         
@@ -659,7 +665,7 @@ void RepositionControls(HWND hwnd) {
     EndDeferWindowPos(hdwp);
     
     /* Refresh line numbers */
-    if (pTab->lineNumState.hwndLineNumbers && g_AppState.bShowLineNumbers) {
+    if (pTab->lineNumState.hwndLineNumbers && g_AppState.bShowLineNumbers && !bZenOrDistraction) {
         InvalidateRect(pTab->lineNumState.hwndLineNumbers, NULL, TRUE);
     }
 }
