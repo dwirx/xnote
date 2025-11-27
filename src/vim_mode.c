@@ -1542,7 +1542,12 @@ static void VimVisualChange(HWND hwndEdit) {
 
 void VimEnterInsertMode(HWND hwndEdit) { 
     g_VimState.mode = VIM_MODE_INSERT; 
-    (void)hwndEdit; 
+    (void)hwndEdit;
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 void VimEnterInsertModeAfter(HWND hwndEdit) {
@@ -1554,22 +1559,42 @@ void VimEnterInsertModeAfter(HWND hwndEdit) {
         SetEditCursorPos(hwndEdit, pos + 1);
     }
     g_VimState.mode = VIM_MODE_INSERT;
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 void VimEnterInsertModeLineStart(HWND hwndEdit) {
     VimMoveFirstNonBlank(hwndEdit);
     g_VimState.mode = VIM_MODE_INSERT;
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 void VimEnterInsertModeLineEnd(HWND hwndEdit) {
     VimMoveLineEnd(hwndEdit);
     g_VimState.mode = VIM_MODE_INSERT;
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 void VimEnterInsertModeNewLineBelow(HWND hwndEdit) {
     VimMoveLineEnd(hwndEdit);
     SendMessage(hwndEdit, EM_REPLACESEL, TRUE, (LPARAM)TEXT("\r\n"));
     g_VimState.mode = VIM_MODE_INSERT;
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 void VimEnterInsertModeNewLineAbove(HWND hwndEdit) {
@@ -1578,11 +1603,21 @@ void VimEnterInsertModeNewLineAbove(HWND hwndEdit) {
     SendMessage(hwndEdit, EM_REPLACESEL, TRUE, (LPARAM)TEXT("\r\n"));
     SetEditCursorPos(hwndEdit, pos);
     g_VimState.mode = VIM_MODE_INSERT;
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 void VimEnterVisualMode(HWND hwndEdit) {
     g_VimState.mode = VIM_MODE_VISUAL;
     g_VimState.dwVisualStart = GetEditCursorPos(hwndEdit);
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 void VimEnterVisualLineMode(HWND hwndEdit) {
@@ -1592,6 +1627,11 @@ void VimEnterVisualLineMode(HWND hwndEdit) {
     g_VimState.nVisualCurrentLine = g_VimState.nVisualStartLine;
     g_VimState.dwVisualStart = GetLineIndex(hwndEdit, g_VimState.nVisualStartLine);
     UpdateVisualLineSelection(hwndEdit, g_VimState.nVisualCurrentLine);
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 void VimEnterNormalMode(HWND hwndEdit) {

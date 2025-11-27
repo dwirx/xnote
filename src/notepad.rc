@@ -252,8 +252,9 @@ BEGIN
     /* Distraction free mode */
     VK_F11, IDM_VIEW_DISTRACTION_FREE, VIRTKEY
     
-    /* Zen mode - Ctrl+K Z (we'll use Ctrl+Shift+Z as alternative) */
-    "Z",    IDM_VI
+    /* Zen mode - Ctrl+Shift+Z */
+    "Z",    IDM_VIEW_ZEN_MODE, VIRTKEY, CONTROL, SHIFT
+END
 
 /* Find/Replace Dialog IDs */
 #define IDD_FINDREPLACE     500
