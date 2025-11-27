@@ -179,7 +179,7 @@ BEGIN
         MENUITEM "Stay on &Top\tCtrl+Shift+T", IDM_VIEW_STAYONTOP
         MENUITEM SEPARATOR
         MENUITEM "&Distraction Free\tF11", IDM_VIEW_DISTRACTION_FREE
-        MENUITEM "&Zen Mode\tCtrl+K Z", IDM_VIEW_ZEN_MODE
+        MENUITEM "&Zen Mode\tCtrl+alt Z", IDM_VIEW_ZEN_MODE
     END
     POPUP "&Help"
     BEGIN
@@ -253,8 +253,7 @@ BEGIN
     VK_F11, IDM_VIEW_DISTRACTION_FREE, VIRTKEY
     
     /* Zen mode - Ctrl+K Z (we'll use Ctrl+Shift+Z as alternative) */
-    "Z",    IDM_VIEW_ZEN_MODE, VIRTKEY, CONTROL, ALT
-END
+    "Z",    IDM_VI
 
 /* Find/Replace Dialog IDs */
 #define IDD_FINDREPLACE     500

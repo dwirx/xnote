@@ -1606,6 +1606,11 @@ void VimEnterNormalMode(HWND hwndEdit) {
     int line = GetLineFromChar(hwndEdit, pos);
     DWORD lineStart = GetLineIndex(hwndEdit, line);
     g_VimState.nDesiredCol = (int)(pos - lineStart);
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 void VimEnterCommandMode(HWND hwndEdit) {
@@ -1614,6 +1619,11 @@ void VimEnterCommandMode(HWND hwndEdit) {
     g_VimState.szCommandBuffer[0] = TEXT(':');
     g_VimState.szCommandBuffer[1] = TEXT('\0');
     g_VimState.nCommandLen = 1;
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 /* Store search start position for realtime search */
@@ -1627,6 +1637,11 @@ void VimEnterSearchMode(HWND hwndEdit, BOOL bForward) {
     g_VimState.nCommandLen = 1;
     /* Save current position for realtime search */
     g_dwSearchStartPos = GetEditCursorPos(hwndEdit);
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 /* ============ Search Functions ============ */
@@ -1951,6 +1966,10 @@ void VimExecuteCommand(HWND hwndMain, HWND hwndEdit) {
         MessageBox(hwndMain, TEXT("Vertical split is not supported in XNote.\nUse tabs instead (:tabnew)"), 
                    TEXT("Vim"), MB_OK | MB_ICONINFORMATION);
     }
+    /* Zen mode toggle */
+    else if (_tcscmp(cmd, TEXT("zen")) == 0) {
+        ToggleZenMode(hwndMain);
+    }
     else if (_tcscmp(cmd, TEXT("help")) == 0 || _tcscmp(cmd, TEXT("h")) == 0) {
         MessageBox(hwndMain, 
             TEXT("XNote Vim Mode Commands:\n\n")
@@ -1960,7 +1979,7 @@ void VimExecuteCommand(HWND hwndMain, HWND hwndEdit) {
             TEXT("Search: / ? n N * #\n")
             TEXT("Scroll: Ctrl+D Ctrl+U Ctrl+F Ctrl+B zz zt zb\n\n")
             TEXT("Ex Commands:\n")
-            TEXT(":w :q :wq :x :e :tabnew :tabn :tabp :bn :bp :bd\n")
+            TEXT(":w :q :wq :x :e :tabnew :tabn :tabp :bn :bp :bd :zen\n")
             TEXT(":set nu :set nonu :set rnu :set nornu :set wrap :set nowrap\n")
             TEXT(":{number} - go to line"),
             TEXT("Vim Help"), MB_OK | MB_ICONINFORMATION);
@@ -1976,6 +1995,11 @@ void VimExecuteCommand(HWND hwndMain, HWND hwndEdit) {
     g_VimState.mode = VIM_MODE_NORMAL;
     g_VimState.szCommandBuffer[0] = TEXT('\0');
     g_VimState.nCommandLen = 0;
+    
+    /* Update overlay for Zen mode */
+    if (g_VimState.hwndMain) {
+        UpdateVimCommandOverlay(g_VimState.hwndMain);
+    }
 }
 
 
@@ -2035,6 +2059,10 @@ BOOL ProcessVimKey(HWND hwndEdit, UINT msg, WPARAM wParam, LPARAM lParam) {
                             SetEditCursorPos(hwndEdit, g_dwSearchStartPos);
                         }
                     }
+                    /* Update overlay for Zen mode */
+                    if (g_VimState.hwndMain) {
+                        UpdateVimCommandOverlay(g_VimState.hwndMain);
+                    }
                 } else {
                     /* Return to start position when canceling search */
                     if (g_VimState.mode == VIM_MODE_SEARCH) {
@@ -2063,6 +2091,11 @@ BOOL ProcessVimKey(HWND hwndEdit, UINT msg, WPARAM wParam, LPARAM lParam) {
                         _tcscpy_s(g_VimState.szSearchPattern, 256, pattern);
                         VimSearchRealtime(hwndEdit);
                     }
+                }
+                
+                /* Update overlay for Zen mode */
+                if (g_VimState.hwndMain) {
+                    UpdateVimCommandOverlay(g_VimState.hwndMain);
                 }
             }
             return TRUE;

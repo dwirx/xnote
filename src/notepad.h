@@ -277,6 +277,11 @@ void ToggleZenMode(HWND hwnd);
 BOOL IsZenModeEnabled(void);
 void UpdateTabGroup(int nTabIndex);
 
+/* Vim command overlay for Zen mode */
+void ShowVimCommandOverlay(HWND hwnd, const TCHAR* szCommand);
+void HideVimCommandOverlay(HWND hwnd);
+void UpdateVimCommandOverlay(HWND hwnd);
+
 /* Drag and Drop operations */
 void DragDrop_Enable(HWND hwnd);
 void DragDrop_HandleFiles(HWND hwnd, HDROP hDrop);

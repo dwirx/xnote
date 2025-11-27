@@ -1865,6 +1865,8 @@ void ToggleStayOnTop(HWND hwnd) {
 
 /* Auto-save all modified files */
 void AutoSaveAllModified(HWND hwnd) {
+    int nSavedCount = 0;
+    
     for (int i = 0; i < g_AppState.nTabCount; i++) {
         TabState* pTab = &g_AppState.tabs[i];
         /* Only save files that have a name (not untitled) and are modified */
@@ -1872,9 +1874,21 @@ void AutoSaveAllModified(HWND hwnd) {
             if (WriteFileContent(pTab->hwndEdit, pTab->szFileName)) {
                 pTab->bModified = FALSE;
                 UpdateTabTitle(i);
+                nSavedCount++;
             }
         }
     }
+    
+    /* Show brief status message if files were saved */
+    if (nSavedCount > 0) {
+        TCHAR szStatus[128];
+        _sntprintf(szStatus, 128, TEXT("Auto-saved %d file(s)"), nSavedCount);
+        SendMessage(g_AppState.hwndStatus, SB_SETTEXT, SB_PART_FILETYPE, (LPARAM)szStatus);
+        
+        /* Reset status after 2 seconds */
+        SetTimer(hwnd, TIMER_STATUSBAR, 2000, NULL);
+    }
+    
     UpdateWindowTitle(hwnd);
 }
 
@@ -2148,6 +2162,95 @@ void ToggleZenMode(HWND hwnd) {
     if (hMenu) {
         CheckMenuItem(hMenu, IDM_VIEW_ZEN_MODE, 
                       g_bZenMode ? MF_CHECKED : MF_UNCHECKED);
+    }
+}
+
+/* Vim command overlay window for Zen mode */
+static HWND g_hwndVimOverlay = NULL;
+
+/* Show vim command overlay at bottom of window */
+void ShowVimCommandOverlay(HWND hwnd, const TCHAR* szCommand) {
+    if (!g_bZenMode) return;
+    
+    /* Create overlay window if not exists */
+    if (!g_hwndVimOverlay) {
+        g_hwndVimOverlay = CreateWindowEx(
+            WS_EX_TOPMOST,
+            TEXT("STATIC"),
+            szCommand,
+            WS_CHILD | WS_VISIBLE | SS_LEFT,
+            0, 0, 0, 0,
+            hwnd,
+            NULL,
+            g_AppState.hInstance,
+            NULL
+        );
+        
+        if (g_hwndVimOverlay) {
+            /* Set font */
+            SendMessage(g_hwndVimOverlay, WM_SETFONT, (WPARAM)GetGlobalFont(), TRUE);
+        }
+    }
+    
+    if (g_hwndVimOverlay) {
+        /* Update text */
+        SetWindowText(g_hwndVimOverlay, szCommand);
+        
+        /* Position at bottom of window */
+        RECT rcClient;
+        GetClientRect(hwnd, &rcClient);
+        
+        int nHeight = 24;
+        int nY = rcClient.bottom - nHeight;
+        
+        SetWindowPos(g_hwndVimOverlay, HWND_TOP, 
+                     0, nY, rcClient.right, nHeight,
+                     SWP_SHOWWINDOW);
+        
+        /* Set colors - dark background with white text */
+        HDC hdc = GetDC(g_hwndVimOverlay);
+        if (hdc) {
+            SetBkColor(hdc, RGB(30, 30, 30));
+            SetTextColor(hdc, RGB(255, 255, 255));
+            ReleaseDC(g_hwndVimOverlay, hdc);
+        }
+        
+        InvalidateRect(g_hwndVimOverlay, NULL, TRUE);
+    }
+}
+
+/* Hide vim command overlay */
+void HideVimCommandOverlay(HWND hwnd) {
+    (void)hwnd;
+    if (g_hwndVimOverlay) {
+        ShowWindow(g_hwndVimOverlay, SW_HIDE);
+    }
+}
+
+/* Update vim command overlay based on current vim state */
+void UpdateVimCommandOverlay(HWND hwnd) {
+    if (!g_bZenMode) {
+        HideVimCommandOverlay(hwnd);
+        return;
+    }
+    
+    if (IsVimModeEnabled()) {
+        VimModeState vimMode = GetVimModeState();
+        if (vimMode == VIM_MODE_COMMAND || vimMode == VIM_MODE_SEARCH) {
+            ShowVimCommandOverlay(hwnd, GetVimCommandBuffer());
+        } else {
+            /* Show vim mode indicator */
+            const TCHAR* szMode = GetVimModeString();
+            if (szMode && szMode[0]) {
+                TCHAR szDisplay[64];
+                _sntprintf(szDisplay, 64, TEXT("-- %s --"), szMode);
+                ShowVimCommandOverlay(hwnd, szDisplay);
+            } else {
+                HideVimCommandOverlay(hwnd);
+            }
+        }
+    } else {
+        HideVimCommandOverlay(hwnd);
     }
 }
 
