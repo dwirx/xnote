@@ -3,8 +3,8 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'  # Trigger on version tags like v1.0.0, v2.0.0
-  workflow_dispatch:  # Allow manual trigger
+      - 'v*'
+  workflow_dispatch:
     inputs:
       version:
         description: 'Version number (e.g., 2.0.0)'
@@ -19,11 +19,22 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Setup MinGW
-      uses: egor-tensin/setup-mingw@v2
-      with:
-        platform: x64
-        
+    - name: Install MinGW
+      run: |
+        choco install mingw -y --no-progress
+      shell: pwsh
+      
+    - name: Add MinGW to PATH
+      run: |
+        echo "C:\ProgramData\mingw64\mingw64\bin" >> $env:GITHUB_PATH
+      shell: pwsh
+      
+    - name: Verify MinGW installation
+      run: |
+        gcc --version
+        mingw32-make --version
+      shell: cmd
+      
     - name: Build xNote
       run: |
         mingw32-make clean
@@ -40,11 +51,11 @@ jobs:
           exit 1
         }
       shell: pwsh
-
+      
     - name: Install NSIS
       run: |
-        choco install nsis -y
-      shell: cmd
+        choco install nsis -y --no-progress
+      shell: pwsh
       
     - name: Get version from tag or input
       id: version
@@ -74,30 +85,17 @@ jobs:
         makensis xnote.nsi
       shell: cmd
       
-    - name: Rename installer with version
+    - name: List installer output
       run: |
-        $version = "${{ steps.version.outputs.VERSION }}"
-        $oldName = "installer/xnote-setup-$version.exe"
-        if (Test-Path $oldName) {
-          Write-Host "Installer created: $oldName"
-        } else {
-          # Try to find any installer file
-          $installers = Get-ChildItem "installer/*.exe" -ErrorAction SilentlyContinue
-          if ($installers) {
-            Write-Host "Found installers: $($installers.Name -join ', ')"
-          } else {
-            Write-Error "No installer found!"
-            exit 1
-          }
-        }
+        Get-ChildItem installer/*.exe
       shell: pwsh
       
     - name: Create Release artifacts directory
       run: |
-        mkdir -p release-artifacts
-        copy xnote.exe release-artifacts/
-        copy installer/xnote-setup-*.exe release-artifacts/
-      shell: bash
+        New-Item -ItemType Directory -Force -Path release-artifacts
+        Copy-Item xnote.exe release-artifacts/
+        Copy-Item installer/xnote-setup-*.exe release-artifacts/
+      shell: pwsh
       
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -128,6 +126,9 @@ jobs:
         name: xnote-release-${{ steps.version.outputs.VERSION }}
         path: release-artifacts/
         
+    - name: List downloaded files
+      run: ls -la release-artifacts/
+        
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
@@ -143,7 +144,7 @@ jobs:
           
           ### Downloads
           - **xnote.exe** - Portable executable (no installation required)
-          - **xnote-setup-${{ steps.version.outputs.VERSION }}.exe** - Windows installer with file associations
+          - **xnote-setup-${{ steps.version.outputs.VERSION }}.exe** - Windows installer
           
           ### Installation
           #### Portable Version
@@ -151,9 +152,8 @@ jobs:
           2. Run directly - no installation needed
           
           #### Installer Version
-          1. Download `xnote-setup-${{ steps.version.outputs.VERSION }}.exe`
-          2. Run the installer
-          3. Follow the installation wizard
+          1. Download the installer
+          2. Run and follow the wizard
           
           ### Features
           - Multi-tab text editor
