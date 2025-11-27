@@ -32,10 +32,11 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/settings.c \
        $(SRC_DIR)/multi_cursor.c \
        $(SRC_DIR)/dragdrop.c \
-       $(SRC_DIR)/performance.c
+       $(SRC_DIR)/performance.c \
+       $(SRC_DIR)/sticky_notes.c
 
 # Object files
-OBJS = $(SRC_DIR)/main.o $(SRC_DIR)/file_ops.o $(SRC_DIR)/edit_ops.o $(SRC_DIR)/dialogs.o $(SRC_DIR)/line_numbers.o $(SRC_DIR)/statusbar.o $(SRC_DIR)/syntax.o $(SRC_DIR)/vim_mode.o $(SRC_DIR)/session.o $(SRC_DIR)/theme.o $(SRC_DIR)/json_format.o $(SRC_DIR)/settings.o $(SRC_DIR)/multi_cursor.o $(SRC_DIR)/dragdrop.o $(SRC_DIR)/performance.o
+OBJS = $(SRC_DIR)/main.o $(SRC_DIR)/file_ops.o $(SRC_DIR)/edit_ops.o $(SRC_DIR)/dialogs.o $(SRC_DIR)/line_numbers.o $(SRC_DIR)/statusbar.o $(SRC_DIR)/syntax.o $(SRC_DIR)/vim_mode.o $(SRC_DIR)/session.o $(SRC_DIR)/theme.o $(SRC_DIR)/json_format.o $(SRC_DIR)/settings.o $(SRC_DIR)/multi_cursor.o $(SRC_DIR)/dragdrop.o $(SRC_DIR)/performance.o $(SRC_DIR)/sticky_notes.o
 
 # Resource files
 RES_SRC = $(SRC_DIR)/notepad.rc
@@ -94,6 +95,9 @@ $(SRC_DIR)/dragdrop.o: $(SRC_DIR)/dragdrop.c $(SRC_DIR)/notepad.h $(SRC_DIR)/res
 
 $(SRC_DIR)/performance.o: $(SRC_DIR)/performance.c $(SRC_DIR)/performance.h $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
 	$(CC) $(CFLAGS) -c $(SRC_DIR)/performance.c -o $(SRC_DIR)/performance.o
+
+$(SRC_DIR)/sticky_notes.o: $(SRC_DIR)/sticky_notes.c $(SRC_DIR)/sticky_notes.h $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+	$(CC) $(CFLAGS) -c $(SRC_DIR)/sticky_notes.c -o $(SRC_DIR)/sticky_notes.o
 
 # Compile resource file
 $(RES_OBJ): $(RES_SRC) $(SRC_DIR)/resource.h

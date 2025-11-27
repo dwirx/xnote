@@ -58,6 +58,7 @@ IDI_APPICON ICON "icons/xnote.ico"
 #define IDM_VIEW_STAYONTOP  269
 #define IDM_VIEW_DISTRACTION_FREE 282
 #define IDM_VIEW_ZEN_MODE   283
+#define IDM_VIEW_STICKYNOTE 284
 #define IDM_FILE_AUTOSAVE   121
 #define IDM_FILE_RECENT_1   130
 #define IDM_FILE_RECENT_2   131
@@ -179,7 +180,13 @@ BEGIN
         MENUITEM "Stay on &Top\tCtrl+Shift+T", IDM_VIEW_STAYONTOP
         MENUITEM SEPARATOR
         MENUITEM "&Distraction Free\tF11", IDM_VIEW_DISTRACTION_FREE
-        MENUITEM "&Zen Mode\tCtrl+alt Z", IDM_VIEW_ZEN_MODE
+        MENUITEM "&Zen Mode\tCtrl+Shift+Z", IDM_VIEW_ZEN_MODE
+        MENUITEM SEPARATOR
+        MENUITEM "New &Sticky Note\tCtrl+Shift+N", IDM_VIEW_STICKYNOTE
+        MENUITEM "&Manage Sticky Notes...\tCtrl+Shift+M", 285
+        MENUITEM SEPARATOR
+        MENUITEM "S&how All Sticky Notes", 286
+        MENUITEM "Hi&de All Sticky Notes", 287
     END
     POPUP "&Help"
     BEGIN
@@ -254,6 +261,12 @@ BEGIN
     
     /* Zen mode - Ctrl+Shift+Z */
     "Z",    IDM_VIEW_ZEN_MODE, VIRTKEY, CONTROL, SHIFT
+    
+    /* Sticky notes - Ctrl+Shift+N */
+    "N",    IDM_VIEW_STICKYNOTE, VIRTKEY, CONTROL, SHIFT
+    
+    /* Manage sticky notes - Ctrl+Shift+M */
+    "M",    285, VIRTKEY, CONTROL, SHIFT
 END
 
 /* Find/Replace Dialog IDs */
@@ -430,4 +443,18 @@ BEGIN
     LTEXT           "- Ctrl+G jumps to any line number",1189,20,320,300,10
     
     PUSHBUTTON      "OK",IDOK,180,355,60,14
+END
+
+/* Manage Sticky Notes Dialog */
+700 DIALOGEX 0, 0, 320, 200
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Manage Sticky Notes"
+FONT 9, "Segoe UI"
+BEGIN
+    CONTROL         "",701,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,10,10,300,145
+    PUSHBUTTON      "Show/Hide",702,10,165,60,14
+    PUSHBUTTON      "Delete",703,75,165,50,14
+    PUSHBUTTON      "New Note",704,130,165,55,14
+    DEFPUSHBUTTON   "Close",IDCANCEL,250,165,60,14
+    LTEXT           "",1400,10,185,200,10
 END

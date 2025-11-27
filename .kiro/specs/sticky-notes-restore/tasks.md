@@ -1,0 +1,161 @@
+# Implementation Plan
+
+- [x] 1. Modify close button behavior to hide instead of delete
+  - [x] 1.1 Update StickyNotes_Close() to hide note instead of delete
+    - Change behavior to set bVisible to FALSE
+    - Hide the window using ShowWindow(hwnd, SW_HIDE)
+    - Preserve all note data (content, position, size, color)
+    - Save changes to persistence
+    - _Requirements: 1.1, 1.2, 1.3_
+  - [x] 1.2 Create new StickyNotes_Hide() function
+    - Implement dedicated hide function
+    - Set bVisible to FALSE
+    - Hide window but keep in storage
+    - _Requirements: 1.1, 1.3_
+  - [ ]* 1.3 Write property test for hide preserves data
+    - **Property 1: Hide preserves note data and sets visibility to false**
+    - **Validates: Requirements 1.1, 1.2, 1.3**
+
+- [x] 2. Implement restore functionality
+  - [x] 2.1 Create StickyNotes_Restore() function
+    - Set bVisible to TRUE
+    - Show window at saved position using ShowWindow(hwnd, SW_SHOW)
+    - Bring window to front
+    - Save changes to persistence
+    - _Requirements: 2.2, 2.3_
+  - [x] 2.2 Create StickyNotes_ToggleVisibility() function
+    - Check current visibility state
+    - Call Hide or Restore accordingly
+    - _Requirements: 3.4_
+  - [ ]* 2.3 Write property test for restore functionality
+    - **Property 2: Restore sets visibility to true and shows window at saved position**
+    - **Validates: Requirements 2.2, 2.3**
+  - [ ]* 2.4 Write property test for hide-restore round trip
+    - **Property 3: Hide then Restore is identity (round-trip)**
+    - **Validates: Requirements 1.2, 2.2**
+  - [ ]* 2.5 Write property test for toggle visibility
+    - **Property 5: Toggle visibility inverts state**
+    - **Validates: Requirements 3.4**
+
+- [x] 3. Implement hidden notes tracking
+  - [x] 3.1 Create StickyNotes_GetHiddenCount() function
+    - Iterate through all notes
+    - Count notes where bVisible is FALSE
+    - Return count
+    - _Requirements: 4.1_
+  - [x] 3.2 Create StickyNotes_GetHiddenNotes() function
+    - Return array of indices for hidden notes
+    - _Requirements: 2.1_
+  - [x] 3.3 Create StickyNotes_GetVisibleNotes() function
+    - Return array of indices for visible notes
+    - _Requirements: 5.3, 5.4_
+  - [ ]* 3.4 Write property test for hidden count accuracy
+    - **Property 4: Hidden count accuracy**
+    - **Validates: Requirements 4.1**
+
+- [x] 4. Checkpoint - Make sure all tests are passing
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 5. Implement Show All and Hide All functions
+  - [x] 5.1 Update StickyNotes_ShowAll() function
+    - Iterate through all notes
+    - Set bVisible to TRUE for each
+    - Show all windows
+    - Save changes
+    - _Requirements: 5.2_
+  - [x] 5.2 Update StickyNotes_HideAll() function
+    - Iterate through all notes
+    - Set bVisible to FALSE for each
+    - Hide all windows
+    - Save changes
+    - _Requirements: 5.1_
+  - [ ]* 5.3 Write property test for Hide All
+    - **Property 6: Hide All sets all notes to hidden**
+    - **Validates: Requirements 5.1**
+  - [ ]* 5.4 Write property test for Show All
+    - **Property 7: Show All sets all notes to visible**
+    - **Validates: Requirements 5.2**
+
+- [x] 6. Add permanent delete functionality
+  - [x] 6.1 Rename current delete to StickyNotes_DeletePermanent()
+    - Keep existing delete logic
+    - Remove note from storage completely
+    - _Requirements: 1.4_
+  - [x] 6.2 Update context menu with Delete option
+    - Add "Delete Note" option to context menu
+    - Show confirmation dialog before delete
+    - _Requirements: 1.4, 3.5_
+  - [ ]* 6.3 Write property test for permanent delete
+    - **Property 8: Delete permanently removes note**
+    - **Validates: Requirements 1.4, 3.5**
+
+- [x] 7. Implement Manage Sticky Notes dialog
+  - [x] 7.1 Add dialog resource to notepad.rc
+    - Create IDD_MANAGE_STICKYNOTES dialog
+    - Add ListView control for notes list
+    - Add Show/Hide, Delete, New Note, Close buttons
+    - _Requirements: 3.1_
+  - [x] 7.2 Add resource IDs to resource.h
+    - Add IDM_VIEW_MANAGE_STICKYNOTES
+    - Add IDD_MANAGE_STICKYNOTES and control IDs
+    - _Requirements: 3.1_
+  - [x] 7.3 Implement StickyNotes_ShowManageDialog() function
+    - Create dialog procedure
+    - Populate ListView with all notes
+    - Show ID, preview (30 chars), color indicator, status
+    - _Requirements: 3.1, 3.2_
+  - [x] 7.4 Implement dialog button handlers
+    - Handle Show/Hide button - toggle selected note visibility
+    - Handle Delete button - delete with confirmation
+    - Handle New Note button - create new note
+    - Handle double-click - focus/restore note
+    - _Requirements: 3.3, 3.4, 3.5_
+
+- [x] 8. Implement Restore submenu
+  - [x] 8.1 Add resource IDs for restore menu
+    - Add IDM_VIEW_RESTORE_STICKYNOTE
+    - Add IDM_RESTORE_STICKYNOTE_BASE (288-297)
+    - _Requirements: 2.1_
+  - [x] 8.2 Create StickyNotes_BuildRestoreMenu() function
+    - Build submenu with hidden notes
+    - Show note ID and content preview
+    - Disable if no hidden notes
+    - _Requirements: 2.1, 2.4_
+  - [x] 8.3 Handle restore menu selection in main WndProc
+    - Map menu ID to note index
+    - Call StickyNotes_Restore()
+    - _Requirements: 2.2_
+
+- [x] 9. Update status bar with hidden notes count
+  - [x] 9.1 Create StickyNotes_UpdateStatusBar() function
+    - Get hidden count
+    - Format status text (e.g., "Hidden: 2")
+    - Update status bar part
+    - _Requirements: 4.1, 4.2, 4.3_
+  - [x] 9.2 Call UpdateStatusBar on visibility changes
+
+    - Call after Hide, Restore, ShowAll, HideAll, Delete
+    - _Requirements: 4.2_
+
+- [x] 10. Integrate with main application menus
+  - [x] 10.1 Update View menu in notepad.rc
+    - Add "Manage Sticky Notes..." with Ctrl+Shift+M
+    - Add "Show All Sticky Notes"
+    - Add "Hide All Sticky Notes"
+    - _Requirements: 2.1, 3.1, 5.1, 5.2_
+  - [x] 10.2 Add accelerator for Ctrl+Shift+M
+    - Add to accelerator table in notepad.rc
+    - _Requirements: 3.1_
+  - [x] 10.3 Update main.c WndProc for new menu commands
+    - Handle IDM_VIEW_MANAGE_STICKYNOTES
+    - Handle IDM_VIEW_SHOWALL_STICKYNOTES
+    - Handle IDM_VIEW_HIDEALL_STICKYNOTES
+    - Handle IDM_RESTORE_STICKYNOTE_BASE + index
+    - _Requirements: 2.2, 3.1, 5.1, 5.2_
+  - [x] 10.4 Update menu state based on notes visibility
+    - Enable/disable Show All based on hidden count
+    - Enable/disable Hide All based on visible count
+    - _Requirements: 5.3, 5.4_
+
+- [x] 11. Final Checkpoint - Make sure all tests are passing
+  - Ensure all tests pass, ask the user if questions arise.

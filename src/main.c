@@ -5,6 +5,7 @@
 #include "theme.h"
 #include "multi_cursor.h"
 #include "performance.h"
+#include "sticky_notes.h"
 #include <richedit.h>
 #include <windowsx.h>  /* For GET_X_LPARAM, GET_Y_LPARAM macros */
 #include <stdio.h>     /* For debug logging */
@@ -1245,6 +1246,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             /* Initialize performance subsystem */
             Perf_Initialize(hwnd);
             
+            /* Initialize sticky notes system */
+            StickyNotes_Init(hwnd, g_AppState.hInstance);
+            StickyNotes_Load();
+            
             /* Initial status bar update */
             UpdateStatusBar(hwnd);
             
@@ -1252,6 +1257,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         
         case WM_SIZE: {
+            /* Handle sticky notes visibility on minimize/restore */
+            if (wParam == SIZE_MINIMIZED) {
+                StickyNotes_HideAll();
+            } else if (wParam == SIZE_RESTORED || wParam == SIZE_MAXIMIZED) {
+                StickyNotes_ShowAll();
+            }
             /* Debounce resize - use timer to avoid too many redraws */
             SetTimer(hwnd, 3, 16, NULL); /* ~60fps */
             return 0;
@@ -1292,6 +1303,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             } else if (wParam == TIMER_AUTOSAVE_FILE) {
                 /* Auto-save modified files */
                 AutoSaveAllModified(hwnd);
+            } else if (wParam == TIMER_STICKY_AUTOSAVE) {
+                /* Auto-save sticky notes */
+                KillTimer(hwnd, TIMER_STICKY_AUTOSAVE);
+                StickyNotes_Save();
             }
             return 0;
         }
@@ -1433,6 +1448,31 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         
         /* Note: WM_LBUTTONUP for tab close is handled by TabSubclassProc using IsPointInCloseButton */
+
+        case WM_INITMENUPOPUP: {
+            HMENU hMenu = (HMENU)wParam;
+            int nPos = LOWORD(lParam);
+            (void)nPos;
+            
+            /* Check if this is the View menu by looking for our sticky note items */
+            int nItemCount = GetMenuItemCount(hMenu);
+            for (int i = 0; i < nItemCount; i++) {
+                UINT id = GetMenuItemID(hMenu, i);
+                if (id == IDM_VIEW_SHOWALL_STICKYNOTES) {
+                    /* Enable/disable Show All based on hidden count */
+                    int hiddenCount = StickyNotes_GetHiddenCount();
+                    EnableMenuItem(hMenu, IDM_VIEW_SHOWALL_STICKYNOTES, 
+                                   hiddenCount > 0 ? MF_ENABLED : MF_GRAYED);
+                }
+                if (id == IDM_VIEW_HIDEALL_STICKYNOTES) {
+                    /* Enable/disable Hide All based on visible count */
+                    int visibleCount = StickyNotes_GetVisibleCount();
+                    EnableMenuItem(hMenu, IDM_VIEW_HIDEALL_STICKYNOTES, 
+                                   visibleCount > 0 ? MF_ENABLED : MF_GRAYED);
+                }
+            }
+            break;
+        }
 
         case WM_COMMAND: {
             HWND hwndEdit = GetCurrentEdit();
@@ -1614,6 +1654,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     ToggleZenMode(hwnd);
                     break;
                 
+                case IDM_VIEW_STICKYNOTE:
+                    StickyNotes_Create();
+                    break;
+                
+                case IDM_VIEW_MANAGE_STICKYNOTES:
+                    StickyNotes_ShowManageDialog(hwnd);
+                    break;
+                
+                case IDM_VIEW_SHOWALL_STICKYNOTES:
+                    StickyNotes_ShowAll();
+                    break;
+                
+                case IDM_VIEW_HIDEALL_STICKYNOTES:
+                    StickyNotes_HideAll();
+                    break;
+                
                 /* Theme selection */
                 case IDM_THEME_LIGHT:
                     SetTheme(THEME_LIGHT);
@@ -1736,7 +1792,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     break;
                 
                 /* Edit control notifications */
-                default:
+                default: {
+                    /* Handle restore sticky note submenu (IDs 288-297) */
+                    int cmdId = LOWORD(wParam);
+                    if (cmdId >= IDM_RESTORE_STICKYNOTE_BASE && 
+                        cmdId < IDM_RESTORE_STICKYNOTE_BASE + MAX_STICKY_NOTES) {
+                        int nIndex = cmdId - IDM_RESTORE_STICKYNOTE_BASE;
+                        StickyNotes_Restore(nIndex);
+                        break;
+                    }
+                    
                     if (HIWORD(wParam) == EN_CHANGE && pTab) {
                         pTab->bModified = TRUE;
                         UpdateTabTitle(g_AppState.nCurrentTab);
@@ -1754,6 +1819,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         }
                     }
                     break;
+                }
             }
             return 0;
         }
@@ -1818,6 +1884,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_DESTROY:
             /* Shutdown performance subsystem */
             Perf_Shutdown();
+            
+            /* Cleanup sticky notes system */
+            StickyNotes_Cleanup();
             
             /* Cleanup session system */
             CleanupSessionSystem();

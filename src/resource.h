@@ -126,6 +126,13 @@
 #define IDM_VIEW_STAYONTOP  269
 #define IDM_VIEW_DISTRACTION_FREE 282
 #define IDM_VIEW_ZEN_MODE   283
+#define IDM_VIEW_STICKYNOTE 284
+#define IDM_VIEW_MANAGE_STICKYNOTES  285
+#define IDM_VIEW_SHOWALL_STICKYNOTES 286
+#define IDM_VIEW_HIDEALL_STICKYNOTES 287
+
+/* Restore sticky note submenu base ID (288-297 for up to 10 notes) */
+#define IDM_RESTORE_STICKYNOTE_BASE  288
 
 /* JSON formatter command IDs */
 #define IDM_FORMAT_JSON         253
@@ -170,5 +177,15 @@
 #define IDC_PROGRESS_BAR    651
 #define IDC_PROGRESS_TEXT   652
 #define IDC_PROGRESS_CANCEL 653
+
+/* Manage Sticky Notes dialog IDs */
+#define IDD_MANAGE_STICKYNOTES  700
+#define IDC_STICKYNOTES_LIST    701
+#define IDC_BTN_SHOWHIDE        702
+#define IDC_BTN_DELETENOTE      703
+#define IDC_BTN_NEWNOTE         704
+
+/* Status bar part for hidden notes */
+#define SB_PART_HIDDEN_NOTES    8
 
 #endif /* RESOURCE_H */
