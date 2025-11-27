@@ -58,6 +58,10 @@ static BOOL RegisterStickyNoteClass(HINSTANCE hInstance);
 static void UnregisterStickyNoteClass(HINSTANCE hInstance);
 static void CalculateNewNotePosition(int* pX, int* pY);
 static BOOL GetStickyNotesPath(TCHAR* szPath, DWORD nSize);
+static void EscapeJsonStr(const TCHAR* src, char* dest, int destSize);
+static int ParseJsonIntValue(const char* json, const char* key, int def);
+static BOOL ParseJsonBoolValue(const char* json, const char* key, BOOL def);
+static void ParseJsonStringValue(const char* json, const char* key, TCHAR* dest, int destSize);
 
 /* Get color RGB value */
 COLORREF StickyNotes_GetColorRGB(StickyNoteColor color) {
@@ -575,6 +579,8 @@ static void EscapeJsonStr(const TCHAR* src, char* dest, int destSize) {
 
 /* Save sticky notes to JSON file */
 void StickyNotes_Save(void) {
+    if (!g_StickyManager.bInitialized) return;
+    
     TCHAR szPath[MAX_PATH];
     if (!GetStickyNotesPath(szPath, MAX_PATH)) return;
     
@@ -585,11 +591,15 @@ void StickyNotes_Save(void) {
     fprintf(fp, "  \"nextNoteId\": %d,\n", g_StickyManager.nNextNoteId);
     fprintf(fp, "  \"stickyNotes\": [\n");
     
+    int validNoteCount = 0;
     for (int i = 0; i < g_StickyManager.nNoteCount; i++) {
         StickyNote* pNote = &g_StickyManager.notes[i];
         
-        /* Get current window position/size */
-        if (pNote->hwndNote) {
+        /* Skip invalid notes */
+        if (pNote->nNoteId <= 0) continue;
+        
+        /* Get current window position/size if window exists */
+        if (pNote->hwndNote && IsWindow(pNote->hwndNote)) {
             RECT rc;
             GetWindowRect(pNote->hwndNote, &rc);
             pNote->nPosX = rc.left;
@@ -598,13 +608,23 @@ void StickyNotes_Save(void) {
             pNote->nHeight = rc.bottom - rc.top;
             
             /* Get content from edit control */
-            if (pNote->hwndEdit) {
+            if (pNote->hwndEdit && IsWindow(pNote->hwndEdit)) {
                 GetWindowText(pNote->hwndEdit, pNote->szContent, STICKY_NOTE_MAX_CONTENT);
             }
         }
         
+        /* Validate dimensions */
+        if (pNote->nWidth < STICKY_NOTE_MIN_WIDTH) pNote->nWidth = STICKY_NOTE_DEFAULT_WIDTH;
+        if (pNote->nHeight < STICKY_NOTE_MIN_HEIGHT) pNote->nHeight = STICKY_NOTE_DEFAULT_HEIGHT;
+        if (pNote->nWidth > 2000) pNote->nWidth = STICKY_NOTE_DEFAULT_WIDTH;
+        if (pNote->nHeight > 2000) pNote->nHeight = STICKY_NOTE_DEFAULT_HEIGHT;
+        
         char escaped[STICKY_NOTE_MAX_CONTENT * 2];
         EscapeJsonStr(pNote->szContent, escaped, sizeof(escaped));
+        
+        if (validNoteCount > 0) {
+            fprintf(fp, ",\n");
+        }
         
         fprintf(fp, "    {\n");
         fprintf(fp, "      \"id\": %d,\n", pNote->nNoteId);
@@ -615,12 +635,13 @@ void StickyNotes_Save(void) {
         fprintf(fp, "      \"color\": %d,\n", (int)pNote->color);
         fprintf(fp, "      \"visible\": %s,\n", pNote->bVisible ? "true" : "false");
         fprintf(fp, "      \"content\": \"%s\"\n", escaped);
-        fprintf(fp, "    }%s\n", (i < g_StickyManager.nNoteCount - 1) ? "," : "");
+        fprintf(fp, "    }");
         
+        validNoteCount++;
         pNote->bModified = FALSE;
     }
     
-    fprintf(fp, "  ]\n");
+    fprintf(fp, "\n  ]\n");
     fprintf(fp, "}\n");
     fclose(fp);
     
@@ -1140,15 +1161,41 @@ LRESULT CALLBACK StickyNoteWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         }
         
         case WM_ACTIVATE: {
+            nIndex = (int)GetWindowLongPtr(hwnd, 0);
             if (LOWORD(wParam) != WA_INACTIVE) {
                 /* Bring to top when activated */
                 SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, 
                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            } else {
+                /* Save when deactivated - ensures data is saved when user clicks away */
+                if (nIndex >= 0 && nIndex < g_StickyManager.nNoteCount) {
+                    StickyNote* pNote = &g_StickyManager.notes[nIndex];
+                    if (pNote->hwndEdit && IsWindow(pNote->hwndEdit)) {
+                        GetWindowText(pNote->hwndEdit, pNote->szContent, STICKY_NOTE_MAX_CONTENT);
+                    }
+                    if (pNote->hwndNote && IsWindow(pNote->hwndNote)) {
+                        RECT rc;
+                        GetWindowRect(pNote->hwndNote, &rc);
+                        pNote->nPosX = rc.left;
+                        pNote->nPosY = rc.top;
+                        pNote->nWidth = rc.right - rc.left;
+                        pNote->nHeight = rc.bottom - rc.top;
+                    }
+                    StickyNotes_Save();
+                }
             }
             break;
         }
         
         case WM_DESTROY: {
+            /* Save content before window is destroyed */
+            nIndex = (int)GetWindowLongPtr(hwnd, 0);
+            if (nIndex >= 0 && nIndex < g_StickyManager.nNoteCount) {
+                StickyNote* pNote = &g_StickyManager.notes[nIndex];
+                if (pNote->hwndEdit && IsWindow(pNote->hwndEdit)) {
+                    GetWindowText(pNote->hwndEdit, pNote->szContent, STICKY_NOTE_MAX_CONTENT);
+                }
+            }
             return 0;
         }
     }
@@ -1367,4 +1414,279 @@ static INT_PTR CALLBACK ManageStickyNotesDlgProc(HWND hwndDlg, UINT msg, WPARAM 
 void StickyNotes_ShowManageDialog(HWND hwndParent) {
     DialogBox(g_StickyManager.hInstance, MAKEINTRESOURCE(IDD_MANAGE_STICKYNOTES), 
               hwndParent, ManageStickyNotesDlgProc);
+}
+
+/* ============================================ */
+/* Force Save and Export/Import Implementation */
+/* ============================================ */
+
+/* Force save - ensures all content is saved immediately */
+void StickyNotes_ForceSave(void) {
+    if (!g_StickyManager.bInitialized) return;
+    
+    /* First, sync all content from edit controls to szContent */
+    for (int i = 0; i < g_StickyManager.nNoteCount; i++) {
+        StickyNote* pNote = &g_StickyManager.notes[i];
+        if (pNote->hwndEdit && IsWindow(pNote->hwndEdit)) {
+            GetWindowText(pNote->hwndEdit, pNote->szContent, STICKY_NOTE_MAX_CONTENT);
+        }
+        if (pNote->hwndNote && IsWindow(pNote->hwndNote)) {
+            RECT rc;
+            GetWindowRect(pNote->hwndNote, &rc);
+            pNote->nPosX = rc.left;
+            pNote->nPosY = rc.top;
+            pNote->nWidth = rc.right - rc.left;
+            pNote->nHeight = rc.bottom - rc.top;
+        }
+    }
+    
+    /* Now save to file */
+    StickyNotes_Save();
+}
+
+/* Export sticky notes to a user-selected file */
+BOOL StickyNotes_Export(HWND hwndParent) {
+    TCHAR szFilePath[MAX_PATH] = TEXT("");
+    
+    OPENFILENAME ofn = {0};
+    ofn.lStructSize = sizeof(OPENFILENAME);
+    ofn.hwndOwner = hwndParent;
+    ofn.lpstrFilter = TEXT("JSON Files (*.json)\0*.json\0All Files (*.*)\0*.*\0");
+    ofn.lpstrFile = szFilePath;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrTitle = TEXT("Export Sticky Notes");
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
+    ofn.lpstrDefExt = TEXT("json");
+    
+    if (!GetSaveFileName(&ofn)) {
+        return FALSE;
+    }
+    
+    /* Force sync all content first */
+    for (int i = 0; i < g_StickyManager.nNoteCount; i++) {
+        StickyNote* pNote = &g_StickyManager.notes[i];
+        if (pNote->hwndEdit && IsWindow(pNote->hwndEdit)) {
+            GetWindowText(pNote->hwndEdit, pNote->szContent, STICKY_NOTE_MAX_CONTENT);
+        }
+    }
+    
+    /* Open file for writing */
+    FILE* fp = _tfopen(szFilePath, TEXT("w"));
+    if (!fp) {
+        MessageBox(hwndParent, TEXT("Failed to create export file."), 
+                   TEXT("Export Error"), MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
+    
+    /* Write JSON with version and metadata */
+    fprintf(fp, "{\n");
+    fprintf(fp, "  \"version\": 1,\n");
+    fprintf(fp, "  \"noteCount\": %d,\n", g_StickyManager.nNoteCount);
+    fprintf(fp, "  \"stickyNotes\": [\n");
+    
+    for (int i = 0; i < g_StickyManager.nNoteCount; i++) {
+        StickyNote* pNote = &g_StickyManager.notes[i];
+        
+        char escaped[STICKY_NOTE_MAX_CONTENT * 2];
+        EscapeJsonStr(pNote->szContent, escaped, sizeof(escaped));
+        
+        fprintf(fp, "    {\n");
+        fprintf(fp, "      \"id\": %d,\n", pNote->nNoteId);
+        fprintf(fp, "      \"x\": %d,\n", pNote->nPosX);
+        fprintf(fp, "      \"y\": %d,\n", pNote->nPosY);
+        fprintf(fp, "      \"width\": %d,\n", pNote->nWidth);
+        fprintf(fp, "      \"height\": %d,\n", pNote->nHeight);
+        fprintf(fp, "      \"color\": %d,\n", (int)pNote->color);
+        fprintf(fp, "      \"visible\": %s,\n", pNote->bVisible ? "true" : "false");
+        fprintf(fp, "      \"content\": \"%s\"\n", escaped);
+        fprintf(fp, "    }%s\n", (i < g_StickyManager.nNoteCount - 1) ? "," : "");
+    }
+    
+    fprintf(fp, "  ]\n");
+    fprintf(fp, "}\n");
+    fclose(fp);
+    
+    TCHAR szMsg[128];
+    wsprintf(szMsg, TEXT("Successfully exported %d sticky note(s)."), g_StickyManager.nNoteCount);
+    MessageBox(hwndParent, szMsg, TEXT("Export Complete"), MB_OK | MB_ICONINFORMATION);
+    
+    return TRUE;
+}
+
+/* Import sticky notes from a user-selected file */
+int StickyNotes_Import(HWND hwndParent) {
+    TCHAR szFilePath[MAX_PATH] = TEXT("");
+    
+    OPENFILENAME ofn = {0};
+    ofn.lStructSize = sizeof(OPENFILENAME);
+    ofn.hwndOwner = hwndParent;
+    ofn.lpstrFilter = TEXT("JSON Files (*.json)\0*.json\0All Files (*.*)\0*.*\0");
+    ofn.lpstrFile = szFilePath;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrTitle = TEXT("Import Sticky Notes");
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+    
+    if (!GetOpenFileName(&ofn)) {
+        return 0;
+    }
+    
+    /* Ask user: Merge or Replace? */
+    int result = MessageBox(hwndParent,
+        TEXT("How would you like to import?\n\n")
+        TEXT("YES = Merge (add to existing notes)\n")
+        TEXT("NO = Replace (delete existing notes first)\n")
+        TEXT("CANCEL = Cancel import"),
+        TEXT("Import Mode"),
+        MB_YESNOCANCEL | MB_ICONQUESTION);
+    
+    if (result == IDCANCEL) {
+        return 0;
+    }
+    
+    BOOL bMerge = (result == IDYES);
+    
+    /* Read file */
+    FILE* fp = _tfopen(szFilePath, TEXT("rb"));
+    if (!fp) {
+        MessageBox(hwndParent, TEXT("Failed to open import file."), 
+                   TEXT("Import Error"), MB_OK | MB_ICONERROR);
+        return -1;
+    }
+    
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    
+    if (size <= 0 || size > 1024 * 1024) {
+        fclose(fp);
+        MessageBox(hwndParent, TEXT("Invalid file size."), 
+                   TEXT("Import Error"), MB_OK | MB_ICONERROR);
+        return -1;
+    }
+    
+    char* json = (char*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size + 1);
+    if (!json) {
+        fclose(fp);
+        return -1;
+    }
+    
+    fread(json, 1, size, fp);
+    fclose(fp);
+    json[size] = '\0';
+    
+    /* If replace mode, delete all existing notes first */
+    if (!bMerge) {
+        while (g_StickyManager.nNoteCount > 0) {
+            StickyNotes_Delete(g_StickyManager.nNoteCount - 1);
+        }
+        g_StickyManager.nNextNoteId = 1;
+    }
+    
+    /* Find stickyNotes array */
+    const char* pNotes = strstr(json, "\"stickyNotes\"");
+    if (!pNotes) {
+        HeapFree(GetProcessHeap(), 0, json);
+        MessageBox(hwndParent, TEXT("Invalid sticky notes file format."), 
+                   TEXT("Import Error"), MB_OK | MB_ICONERROR);
+        return -1;
+    }
+    
+    pNotes = strchr(pNotes, '[');
+    if (!pNotes) {
+        HeapFree(GetProcessHeap(), 0, json);
+        MessageBox(hwndParent, TEXT("Invalid sticky notes file format."), 
+                   TEXT("Import Error"), MB_OK | MB_ICONERROR);
+        return -1;
+    }
+    pNotes++;
+    
+    int importedCount = 0;
+    
+    /* Parse each note object */
+    while (*pNotes && g_StickyManager.nNoteCount < MAX_STICKY_NOTES) {
+        const char* pObj = strchr(pNotes, '{');
+        if (!pObj) break;
+        
+        const char* pObjEnd = strchr(pObj, '}');
+        if (!pObjEnd) break;
+        
+        int objLen = (int)(pObjEnd - pObj + 1);
+        char* objStr = (char*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, objLen + 1);
+        if (!objStr) break;
+        
+        strncpy(objStr, pObj, objLen);
+        objStr[objLen] = '\0';
+        
+        int nIndex = g_StickyManager.nNoteCount;
+        StickyNote* pNote = &g_StickyManager.notes[nIndex];
+        
+        /* For merge mode, generate new ID; for replace, use original */
+        if (bMerge) {
+            pNote->nNoteId = g_StickyManager.nNextNoteId++;
+        } else {
+            pNote->nNoteId = ParseJsonIntValue(objStr, "id", g_StickyManager.nNextNoteId);
+            if (pNote->nNoteId >= g_StickyManager.nNextNoteId) {
+                g_StickyManager.nNextNoteId = pNote->nNoteId + 1;
+            }
+        }
+        
+        pNote->nPosX = ParseJsonIntValue(objStr, "x", 100 + importedCount * 30);
+        pNote->nPosY = ParseJsonIntValue(objStr, "y", 100 + importedCount * 30);
+        pNote->nWidth = ParseJsonIntValue(objStr, "width", STICKY_NOTE_DEFAULT_WIDTH);
+        pNote->nHeight = ParseJsonIntValue(objStr, "height", STICKY_NOTE_DEFAULT_HEIGHT);
+        pNote->color = (StickyNoteColor)ParseJsonIntValue(objStr, "color", STICKY_COLOR_YELLOW);
+        pNote->bVisible = ParseJsonBoolValue(objStr, "visible", TRUE);
+        ParseJsonStringValue(objStr, "content", pNote->szContent, STICKY_NOTE_MAX_CONTENT);
+        pNote->bModified = FALSE;
+        
+        if (pNote->color < 0 || pNote->color >= STICKY_COLOR_COUNT) {
+            pNote->color = STICKY_COLOR_YELLOW;
+        }
+        
+        if (pNote->nWidth < STICKY_NOTE_MIN_WIDTH) pNote->nWidth = STICKY_NOTE_MIN_WIDTH;
+        if (pNote->nHeight < STICKY_NOTE_MIN_HEIGHT) pNote->nHeight = STICKY_NOTE_MIN_HEIGHT;
+        
+        /* Ensure position is on screen */
+        RECT rcWork;
+        SystemParametersInfo(SPI_GETWORKAREA, 0, &rcWork, 0);
+        if (pNote->nPosX < rcWork.left) pNote->nPosX = rcWork.left + 20;
+        if (pNote->nPosY < rcWork.top) pNote->nPosY = rcWork.top + 20;
+        if (pNote->nPosX + pNote->nWidth > rcWork.right) 
+            pNote->nPosX = rcWork.right - pNote->nWidth - 20;
+        if (pNote->nPosY + pNote->nHeight > rcWork.bottom) 
+            pNote->nPosY = rcWork.bottom - pNote->nHeight - 20;
+        
+        /* Create window for the note */
+        pNote->hwndNote = CreateWindowEx(
+            WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+            szStickyNoteClass,
+            TEXT(""),
+            WS_POPUP | WS_THICKFRAME | (pNote->bVisible ? WS_VISIBLE : 0),
+            pNote->nPosX, pNote->nPosY,
+            pNote->nWidth, pNote->nHeight,
+            g_StickyManager.hwndParent,
+            NULL,
+            g_StickyManager.hInstance,
+            (LPVOID)(LONG_PTR)nIndex
+        );
+        
+        if (pNote->hwndNote) {
+            g_StickyManager.nNoteCount++;
+            importedCount++;
+        }
+        
+        HeapFree(GetProcessHeap(), 0, objStr);
+        pNotes = pObjEnd + 1;
+    }
+    
+    HeapFree(GetProcessHeap(), 0, json);
+    
+    /* Save the imported notes */
+    StickyNotes_Save();
+    
+    TCHAR szMsg[128];
+    wsprintf(szMsg, TEXT("Successfully imported %d sticky note(s)."), importedCount);
+    MessageBox(hwndParent, szMsg, TEXT("Import Complete"), MB_OK | MB_ICONINFORMATION);
+    
+    return importedCount;
 }

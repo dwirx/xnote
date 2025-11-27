@@ -26,7 +26,7 @@
 
 /* Auto-save timer */
 #define TIMER_STICKY_AUTOSAVE 10
-#define STICKY_AUTOSAVE_DELAY 5000  /* 5 seconds */
+#define STICKY_AUTOSAVE_DELAY 2000  /* 2 seconds - faster autosave */
 
 /* Sticky note colors */
 typedef enum {
@@ -109,6 +109,11 @@ void StickyNotes_UpdateStatusBar(HWND hwndStatusBar, int nPart);
 /* Persistence */
 void StickyNotes_Save(void);
 void StickyNotes_Load(void);
+void StickyNotes_ForceSave(void);
+
+/* Export/Import */
+BOOL StickyNotes_Export(HWND hwndParent);
+int StickyNotes_Import(HWND hwndParent);
 
 /* Mark note as modified (triggers auto-save) */
 void StickyNotes_MarkModified(int nIndex);

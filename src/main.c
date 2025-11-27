@@ -1512,6 +1512,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     ToggleAutoSave(hwnd);
                     break;
                 
+                case IDM_FILE_EXPORT_STICKYNOTES:
+                    StickyNotes_Export(hwnd);
+                    break;
+                
+                case IDM_FILE_IMPORT_STICKYNOTES:
+                    StickyNotes_Import(hwnd);
+                    break;
+                
                 /* Recent files */
                 case IDM_FILE_RECENT_1:
                 case IDM_FILE_RECENT_2:
@@ -1833,6 +1841,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_CLOSE: {
             /* Save session before closing */
             SaveSessionOnExit(hwnd);
+            
+            /* Force save sticky notes before closing - IMPORTANT: must be done before DestroyWindow */
+            StickyNotes_ForceSave();
             
             /* Check all tabs for unsaved changes */
             for (int i = 0; i < g_AppState.nTabCount; i++) {

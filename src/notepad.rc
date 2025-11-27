@@ -70,6 +70,8 @@ IDI_APPICON ICON "icons/xnote.ico"
 #define IDM_FILE_RECENT_8   137
 #define IDM_FILE_RECENT_9   138
 #define IDM_FILE_RECENT_10  139
+#define IDM_FILE_EXPORT_STICKYNOTES  140
+#define IDM_FILE_IMPORT_STICKYNOTES  141
 #define IDM_THEME_LIGHT         270
 #define IDM_THEME_DARK          271
 #define IDM_THEME_TOKYO_NIGHT   272
@@ -110,6 +112,9 @@ BEGIN
         BEGIN
             MENUITEM "(Empty)",             IDM_FILE_RECENT_1, GRAYED
         END
+        MENUITEM SEPARATOR
+        MENUITEM "Export Sticky Notes...",  IDM_FILE_EXPORT_STICKYNOTES
+        MENUITEM "Import Sticky Notes...",  IDM_FILE_IMPORT_STICKYNOTES
         MENUITEM SEPARATOR
         MENUITEM "E&xit\tAlt+F4",           IDM_FILE_EXIT
     END

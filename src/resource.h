@@ -188,4 +188,8 @@
 /* Status bar part for hidden notes */
 #define SB_PART_HIDDEN_NOTES    8
 
+/* Sticky Notes Export/Import menu IDs */
+#define IDM_FILE_EXPORT_STICKYNOTES  140
+#define IDM_FILE_IMPORT_STICKYNOTES  141
+
 #endif /* RESOURCE_H */
