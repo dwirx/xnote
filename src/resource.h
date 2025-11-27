@@ -107,6 +107,7 @@
 #define IDM_VIEW_ZOOMOUT    266
 #define IDM_VIEW_ZOOMRESET  267
 #define IDM_VIEW_FULLSCREEN 268
+#define IDM_VIEW_STAYONTOP  269
 
 /* JSON formatter command IDs */
 #define IDM_FORMAT_JSON         253

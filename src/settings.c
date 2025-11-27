@@ -21,6 +21,7 @@ static int g_nWindowWidth = 1200;
 static int g_nWindowHeight = 800;
 static BOOL g_bWindowMaximized = FALSE;
 static BOOL g_bAutoFormatJson = FALSE;  /* Auto-format JSON on save - default OFF */
+static BOOL g_bStayOnTop = FALSE;       /* Stay on top mode - default OFF */
 
 static BOOL GetSettingsPath(TCHAR* szPath, DWORD nSize) {
     if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, 0, szPath))) {
@@ -121,6 +122,7 @@ void LoadSettings(void) {
     g_nSessionCount = ParseJsonStringArray(json, "sessionFiles", g_SessionFiles, MAX_TABS);
     g_nSessionActiveTab = ParseJsonInt(json, "sessionActiveTab", 0);
     g_bAutoFormatJson = ParseJsonBool(json, "autoFormatJson", FALSE);
+    g_bStayOnTop = ParseJsonBool(json, "stayOnTop", FALSE);
     HeapFree(GetProcessHeap(), 0, json);
 }
 
@@ -160,7 +162,8 @@ void SaveSettings(void) {
     if (sessionCount > 0) fprintf(fp, "\n");
     fprintf(fp, "  ],\n");
     fprintf(fp, "  \"sessionActiveTab\": %d,\n", g_AppState.nCurrentTab);
-    fprintf(fp, "  \"autoFormatJson\": %s\n", g_bAutoFormatJson ? "true" : "false");
+    fprintf(fp, "  \"autoFormatJson\": %s,\n", g_bAutoFormatJson ? "true" : "false");
+    fprintf(fp, "  \"stayOnTop\": %s\n", g_bStayOnTop ? "true" : "false");
     fprintf(fp, "}\n");
     fclose(fp);
 }
@@ -261,3 +264,7 @@ void ClearSession(void) { g_nSessionCount = 0; g_nSessionActiveTab = 0; }
 /* JSON auto-format settings */
 BOOL IsAutoFormatJsonEnabled(void) { return g_bAutoFormatJson; }
 void SetAutoFormatJson(BOOL bEnabled) { g_bAutoFormatJson = bEnabled; }
+
+/* Stay on top settings */
+BOOL IsStayOnTopEnabled(void) { return g_bStayOnTop; }
+void SetStayOnTop(BOOL bEnabled) { g_bStayOnTop = bEnabled; }

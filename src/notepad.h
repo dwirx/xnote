@@ -247,6 +247,9 @@ HFONT GetGlobalFont(void);
 /* Settings functions */
 BOOL IsAutoFormatJsonEnabled(void);
 void SetAutoFormatJson(BOOL bEnabled);
+BOOL IsStayOnTopEnabled(void);
+void SetStayOnTop(BOOL bEnabled);
+void ToggleStayOnTop(HWND hwnd);
 
 /* Drag and Drop operations */
 void DragDrop_Enable(HWND hwnd);

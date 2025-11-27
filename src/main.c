@@ -1066,6 +1066,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                           g_bSyntaxHighlight ? MF_CHECKED : MF_UNCHECKED);
             CheckMenuItem(hMenu, IDM_AUTO_FORMAT_JSON, 
                           IsAutoFormatJsonEnabled() ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_VIEW_STAYONTOP, 
+                          IsStayOnTopEnabled() ? MF_CHECKED : MF_UNCHECKED);
+            
+            /* Apply stay on top state if enabled */
+            if (IsStayOnTopEnabled()) {
+                SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            }
             
             /* Start periodic sync timer for line numbers if enabled */
             if (g_AppState.bShowLineNumbers) {
@@ -1408,6 +1415,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     ToggleVimMode(hwnd);
                     break;
                 
+                case IDM_VIEW_STAYONTOP:
+                    ToggleStayOnTop(hwnd);
+                    break;
+                
                 /* Theme selection */
                 case IDM_THEME_LIGHT:
                     SetTheme(THEME_LIGHT);
@@ -1642,6 +1653,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
     
     return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+/* Toggle stay on top mode */
+void ToggleStayOnTop(HWND hwnd) {
+    BOOL bEnabled = !IsStayOnTopEnabled();
+    SetStayOnTop(bEnabled);
+    
+    /* Apply topmost state to window */
+    SetWindowPos(hwnd, bEnabled ? HWND_TOPMOST : HWND_NOTOPMOST,
+                 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    
+    /* Update menu check mark */
+    HMENU hMenu = GetMenu(hwnd);
+    CheckMenuItem(hMenu, IDM_VIEW_STAYONTOP, 
+                  bEnabled ? MF_CHECKED : MF_UNCHECKED);
+    
+    /* Mark session dirty */
+    MarkSessionDirty();
 }
 
 /* Toggle word wrap on/off */
