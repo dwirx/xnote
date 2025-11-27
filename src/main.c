@@ -4,6 +4,7 @@
 #include "session.h"
 #include "theme.h"
 #include "multi_cursor.h"
+#include "performance.h"
 #include <richedit.h>
 #include <windowsx.h>  /* For GET_X_LPARAM, GET_Y_LPARAM macros */
 #include <stdio.h>     /* For debug logging */
@@ -1080,6 +1081,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             /* Enable drag and drop */
             DragDrop_Enable(hwnd);
             
+            /* Initialize performance subsystem */
+            Perf_Initialize(hwnd);
+            
             /* Initial status bar update */
             UpdateStatusBar(hwnd);
             
@@ -1571,7 +1575,44 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
         
+        /* Async I/O completion handlers */
+        case WM_ASYNC_LOAD_COMPLETE: {
+            AsyncFileOp* pOp = (AsyncFileOp*)lParam;
+            if (pOp) {
+                if (wParam) {
+                    /* Success - file loaded */
+                    /* TODO: Process loaded content */
+                }
+                IOCP_FreeOp(pOp);
+            }
+            return 0;
+        }
+        
+        case WM_ASYNC_SAVE_COMPLETE: {
+            AsyncFileOp* pOp = (AsyncFileOp*)lParam;
+            if (pOp) {
+                if (!wParam) {
+                    /* Save failed */
+                    ShowErrorDialog(hwnd, TEXT("Auto-save failed"));
+                }
+                IOCP_FreeOp(pOp);
+            }
+            return 0;
+        }
+        
+        case WM_AUTOSAVE_COMPLETE: {
+            /* Auto-save triggered - save current file if modified */
+            TabState* pTab = GetCurrentTabState();
+            if (pTab && pTab->bModified && !pTab->bUntitled) {
+                FileSave(hwnd);
+            }
+            return 0;
+        }
+        
         case WM_DESTROY:
+            /* Shutdown performance subsystem */
+            Perf_Shutdown();
+            
             /* Cleanup session system */
             CleanupSessionSystem();
             

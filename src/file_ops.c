@@ -2,6 +2,7 @@
 #include "syntax.h"
 #include "session.h"
 #include "json_format.h"
+#include "performance.h"
 #include <stdio.h>
 #include <richedit.h>
 

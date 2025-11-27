@@ -57,17 +57,21 @@ echo [13/15] Compiling multi_cursor.c...
 gcc -Wall -Wextra -O3 -DUNICODE -D_UNICODE -c src/multi_cursor.c -o src/multi_cursor.o
 if errorlevel 1 goto error
 
-echo [14/15] Compiling dragdrop.c...
+echo [14/16] Compiling dragdrop.c...
 gcc -Wall -Wextra -O3 -DUNICODE -D_UNICODE -c src/dragdrop.c -o src/dragdrop.o
 if errorlevel 1 goto error
 
-echo [15/15] Compiling resources...
+echo [15/16] Compiling performance.c...
+gcc -Wall -Wextra -O3 -DUNICODE -D_UNICODE -c src/performance.c -o src/performance.o
+if errorlevel 1 goto error
+
+echo [16/16] Compiling resources...
 windres "--preprocessor=gcc -E -xc -DRC_INVOKED" src/notepad.rc -o src/notepad.o
 if errorlevel 1 goto error
 
 echo.
 echo Linking...
-gcc src/main.o src/file_ops.o src/edit_ops.o src/dialogs.o src/line_numbers.o src/statusbar.o src/syntax.o src/vim_mode.o src/session.o src/theme.o src/settings.o src/json_format.o src/multi_cursor.o src/dragdrop.o src/notepad.o -o xnote.exe -mwindows -lcomctl32 -lcomdlg32 -lshell32 -lshlwapi -s
+gcc src/main.o src/file_ops.o src/edit_ops.o src/dialogs.o src/line_numbers.o src/statusbar.o src/syntax.o src/vim_mode.o src/session.o src/theme.o src/settings.o src/json_format.o src/multi_cursor.o src/dragdrop.o src/performance.o src/notepad.o -o xnote.exe -mwindows -lcomctl32 -lcomdlg32 -lshell32 -lshlwapi -lpsapi -s
 if errorlevel 1 goto error
 
 echo.

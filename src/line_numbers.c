@@ -18,11 +18,18 @@ static int g_nLastCurrentLine = -1;
 static HBRUSH g_hCachedBgBrush = NULL;
 static COLORREF g_crCachedBgColor = 0;
 
+/* Cached character width for adaptive calculation */
+static int g_nCachedCharWidth = 0;
+static HFONT g_hCachedFont = NULL;
+
 /* Reset line number cache (call when switching tabs or loading new file) */
 void ResetLineNumberCache(void) {
     g_nLastFirstVisible = -1;
     g_nLastTotalLines = -1;
     g_nLastCurrentLine = -1;
+    /* Also reset character width cache to recalculate for new tab's font */
+    g_nCachedCharWidth = 0;
+    g_hCachedFont = NULL;
 }
 
 
@@ -54,7 +61,58 @@ static BOOL RegisterLineNumberClass(HINSTANCE hInstance) {
     return FALSE;
 }
 
-/* Calculate line number width based on line count */
+/* Calculate actual character width based on current font */
+static int GetAdaptiveCharWidth(HWND hwndEdit) {
+    if (!hwndEdit) return 10; /* Default fallback */
+    
+    HFONT hFont = (HFONT)SendMessage(hwndEdit, WM_GETFONT, 0, 0);
+    
+    /* Use cached value if font hasn't changed */
+    if (hFont == g_hCachedFont && g_nCachedCharWidth > 0) {
+        return g_nCachedCharWidth;
+    }
+    
+    /* Measure actual character width using the edit control's font */
+    HDC hdc = GetDC(hwndEdit);
+    if (!hdc) return 10;
+    
+    HFONT hOldFont = NULL;
+    if (hFont) {
+        hOldFont = (HFONT)SelectObject(hdc, hFont);
+    }
+    
+    /* Measure width of digit '0' which is typically the widest digit */
+    SIZE size;
+    if (GetTextExtentPoint32(hdc, TEXT("0"), 1, &size)) {
+        g_nCachedCharWidth = size.cx;
+    } else {
+        g_nCachedCharWidth = 10; /* Fallback */
+    }
+    
+    /* Also measure '8' and '9' to get max width (some fonts vary) */
+    SIZE size8, size9;
+    if (GetTextExtentPoint32(hdc, TEXT("8"), 1, &size8)) {
+        if (size8.cx > g_nCachedCharWidth) g_nCachedCharWidth = size8.cx;
+    }
+    if (GetTextExtentPoint32(hdc, TEXT("9"), 1, &size9)) {
+        if (size9.cx > g_nCachedCharWidth) g_nCachedCharWidth = size9.cx;
+    }
+    
+    if (hOldFont) {
+        SelectObject(hdc, hOldFont);
+    }
+    ReleaseDC(hwndEdit, hdc);
+    
+    /* Cache the font handle */
+    g_hCachedFont = hFont;
+    
+    /* Ensure minimum width */
+    if (g_nCachedCharWidth < 6) g_nCachedCharWidth = 6;
+    
+    return g_nCachedCharWidth;
+}
+
+/* Calculate line number width based on line count - ADAPTIVE VERSION */
 int CalculateLineNumberWidth(int nLineCount) {
     int nDigits = 1;
     int n = nLineCount;
@@ -64,11 +122,28 @@ int CalculateLineNumberWidth(int nLineCount) {
         n /= 10;
     }
     
-    /* Minimum 3 digits width for better appearance */
-    if (nDigits < 3) nDigits = 3;
+    /* Minimum 4 digits width for better appearance */
+    if (nDigits < 4) nDigits = 4;
     
-    /* Character width ~9 pixels for Consolas 16pt, plus padding */
-    return (nDigits * 9) + 20;
+    /* Maximum 9 digits (supports up to 999,999,999 lines) */
+    if (nDigits > 9) nDigits = 9;
+    
+    /* Get adaptive character width based on actual font */
+    HWND hwndEdit = GetCurrentEdit();
+    int nCharWidth = GetAdaptiveCharWidth(hwndEdit);
+    
+    /* Add extra padding:
+     * - 8px left padding for visual spacing
+     * - 12px right padding for separator line and margin
+     * Total padding: 20px */
+    int nPadding = 20;
+    
+    /* For very large numbers (7+ digits), add extra padding */
+    if (nDigits >= 7) {
+        nPadding += 4;
+    }
+    
+    return (nDigits * nCharWidth) + nPadding;
 }
 
 

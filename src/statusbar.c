@@ -184,6 +184,15 @@ void UpdateStatusBar(HWND hwnd) {
         _sntprintf(szText, 256, TEXT("lines: %d"), nLines);
         SendMessage(g_AppState.hwndStatus, SB_SETTEXT, SB_PART_LINES, (LPARAM)szText);
         
+        /* Update line number width if needed (for large files with many lines) */
+        if (pTab && g_AppState.bShowLineNumbers && pTab->lineNumState.hwndLineNumbers) {
+            int nNewWidth = CalculateLineNumberWidth(nLines);
+            if (nNewWidth != pTab->lineNumState.nLineNumberWidth) {
+                pTab->lineNumState.nLineNumberWidth = nNewWidth;
+                RepositionControls(hwnd);
+            }
+        }
+        
         /* Part 3: Current position (Ln, Col, Pos) */
         DWORD dwStart = 0, dwEnd = 0;
         SendMessage(hwndEdit, EM_GETSEL, (WPARAM)&dwStart, (LPARAM)&dwEnd);
