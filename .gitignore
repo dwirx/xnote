@@ -1,0 +1,44 @@
+# Compiled Object files
+*.o
+*.obj
+
+# Compiled Resource files
+*.res
+
+# Executables - ignore build outputs
+*.exe
+
+# Windows specific
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# Build artifacts
+*.dll
+*.so
+*.dylib
+
+# Editor/IDE files
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+
+# Debug files
+*.pdb
+*.ilk
+xnote_debug.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Test files
+test_*.txt
+
+# Library archives (keep extracted folders)
+lib/*.zip
+
+# Kiro specs (optional - uncomment to ignore)
+# .kiro/

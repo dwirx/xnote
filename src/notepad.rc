@@ -1,0 +1,401 @@
+#include <windows.h>
+
+/* Application Icon */
+#define IDI_APPICON 1
+IDI_APPICON ICON "icons/xnote.ico"
+
+/* Menu command IDs */
+#define IDM_FILE_NEW        101
+#define IDM_FILE_OPEN       102
+#define IDM_FILE_SAVE       103
+#define IDM_FILE_SAVEAS     104
+#define IDM_FILE_EXIT       105
+#define IDM_FILE_NEWTAB      106
+#define IDM_FILE_CLOSETAB    107
+#define IDM_TAB_NEXT         108
+#define IDM_TAB_PREV         109
+#define IDM_FILE_CLOSEALL    119
+#define IDM_FILE_CLOSEOTHERS 120
+#define IDM_TAB_1           110
+#define IDM_TAB_2           111
+#define IDM_TAB_3           112
+#define IDM_TAB_4           113
+#define IDM_TAB_5           114
+#define IDM_TAB_6           115
+#define IDM_TAB_7           116
+#define IDM_TAB_8           117
+#define IDM_TAB_9           118
+#define IDM_EDIT_UNDO       201
+#define IDM_EDIT_CUT        202
+#define IDM_EDIT_COPY       203
+#define IDM_EDIT_PASTE      204
+#define IDM_EDIT_SELECTALL  205
+#define IDM_EDIT_FIND       206
+#define IDM_EDIT_REPLACE    207
+#define IDM_EDIT_FINDNEXT   208
+#define IDM_EDIT_GOTOLINE       209
+#define IDM_EDIT_DUPLICATELINE  210
+#define IDM_EDIT_DELETELINE     211
+#define IDM_EDIT_MOVELINEUP     212
+#define IDM_EDIT_MOVELINEDOWN   213
+#define IDM_EDIT_TOGGLECOMMENT  214
+#define IDM_EDIT_INDENT         215
+#define IDM_EDIT_UNINDENT       216
+#define IDM_EDIT_LOADMORE       217
+#define IDM_HELP_CONTENTS   302
+#define IDM_FORMAT_WORDWRAP 251
+#define IDM_FORMAT_FONT     252
+#define IDM_FORMAT_JSON         253
+#define IDM_MINIFY_JSON         254
+#define IDM_AUTO_FORMAT_JSON    255
+#define IDM_VIEW_LINENUMBERS 261
+#define IDM_VIEW_SYNTAX      262
+#define IDM_VIEW_VIMMODE     263
+#define IDM_VIEW_RELATIVENUM 264
+#define IDM_VIEW_ZOOMIN     265
+#define IDM_VIEW_ZOOMOUT    266
+#define IDM_VIEW_ZOOMRESET  267
+#define IDM_THEME_LIGHT         270
+#define IDM_THEME_DARK          271
+#define IDM_THEME_TOKYO_NIGHT   272
+#define IDM_THEME_TOKYO_STORM   273
+#define IDM_THEME_TOKYO_LIGHT   274
+#define IDM_THEME_MONOKAI       275
+#define IDM_THEME_DRACULA       276
+#define IDM_THEME_ONE_DARK      277
+#define IDM_THEME_NORD          278
+#define IDM_THEME_GRUVBOX       279
+#define IDM_THEME_EVERFOREST_DARK  280
+#define IDM_THEME_EVERFOREST_LIGHT 281
+#define IDM_HELP_ABOUT      301
+#define IDR_MAINMENU        1000
+#define IDR_ACCEL           1001
+
+/* Main Menu */
+IDR_MAINMENU MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&New\tCtrl+N",            IDM_FILE_NEW
+        MENUITEM "New &Tab\tCtrl+T",        IDM_FILE_NEWTAB
+        MENUITEM "&Open...\tCtrl+O",        IDM_FILE_OPEN
+        MENUITEM "&Save\tCtrl+S",           IDM_FILE_SAVE
+        MENUITEM "Save &As...\tCtrl+Shift+S", IDM_FILE_SAVEAS
+        MENUITEM SEPARATOR
+        MENUITEM "&Close Tab\tCtrl+W",      IDM_FILE_CLOSETAB
+        MENUITEM "Close &All Tabs",         IDM_FILE_CLOSEALL
+        MENUITEM "Close &Other Tabs",       IDM_FILE_CLOSEOTHERS
+        MENUITEM SEPARATOR
+        MENUITEM "Next Tab\tCtrl+Tab",      IDM_TAB_NEXT
+        MENUITEM "Previous Tab\tCtrl+Shift+Tab", IDM_TAB_PREV
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit\tAlt+F4",           IDM_FILE_EXIT
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "&Undo\tCtrl+Z",           IDM_EDIT_UNDO
+        MENUITEM SEPARATOR
+        MENUITEM "Cu&t\tCtrl+X",            IDM_EDIT_CUT
+        MENUITEM "&Copy\tCtrl+C",           IDM_EDIT_COPY
+        MENUITEM "&Paste\tCtrl+V",          IDM_EDIT_PASTE
+        MENUITEM SEPARATOR
+        MENUITEM "Select &All\tCtrl+A",     IDM_EDIT_SELECTALL
+        MENUITEM SEPARATOR
+        MENUITEM "&Find...\tCtrl+F",        IDM_EDIT_FIND
+        MENUITEM "Find &Next\tF3",          IDM_EDIT_FINDNEXT
+        MENUITEM "&Replace...\tCtrl+H",     IDM_EDIT_REPLACE
+        MENUITEM "&Go to Line...\tCtrl+G",  IDM_EDIT_GOTOLINE
+        MENUITEM SEPARATOR
+        MENUITEM "&Duplicate Line\tCtrl+D", IDM_EDIT_DUPLICATELINE
+        MENUITEM "De&lete Line\tCtrl+Shift+K", IDM_EDIT_DELETELINE
+        MENUITEM "Move Line &Up\tAlt+Up",   IDM_EDIT_MOVELINEUP
+        MENUITEM "Move Line Do&wn\tAlt+Down", IDM_EDIT_MOVELINEDOWN
+        MENUITEM SEPARATOR
+        MENUITEM "&Indent\tTab",            IDM_EDIT_INDENT
+        MENUITEM "U&nindent\tShift+Tab",    IDM_EDIT_UNINDENT
+        MENUITEM "Toggle &Comment\tCtrl+/", IDM_EDIT_TOGGLECOMMENT
+    END
+    POPUP "F&ormat"
+    BEGIN
+        MENUITEM "&Word Wrap\tAlt+Z",       IDM_FORMAT_WORDWRAP
+        MENUITEM "&Font...",                IDM_FORMAT_FONT
+        MENUITEM SEPARATOR
+        MENUITEM "Format &JSON\tCtrl+Shift+J", IDM_FORMAT_JSON
+        MENUITEM "&Minify JSON",            IDM_MINIFY_JSON
+        MENUITEM SEPARATOR
+        MENUITEM "&Auto-Format JSON on Save", IDM_AUTO_FORMAT_JSON
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Line Numbers\tCtrl+L",   IDM_VIEW_LINENUMBERS
+        MENUITEM "&Relative Line Numbers",  IDM_VIEW_RELATIVENUM
+        MENUITEM "&Syntax Highlighting",    IDM_VIEW_SYNTAX
+        MENUITEM SEPARATOR
+        POPUP "&Theme"
+        BEGIN
+            MENUITEM "&Light",              IDM_THEME_LIGHT
+            MENUITEM "&Dark",               IDM_THEME_DARK
+            MENUITEM SEPARATOR
+            MENUITEM "&Tokyo Night",        IDM_THEME_TOKYO_NIGHT
+            MENUITEM "Tokyo Night &Storm",  IDM_THEME_TOKYO_STORM
+            MENUITEM "Tokyo Night Li&ght",  IDM_THEME_TOKYO_LIGHT
+            MENUITEM SEPARATOR
+            MENUITEM "&Monokai",            IDM_THEME_MONOKAI
+            MENUITEM "D&racula",            IDM_THEME_DRACULA
+            MENUITEM "&One Dark",           IDM_THEME_ONE_DARK
+            MENUITEM "&Nord",               IDM_THEME_NORD
+            MENUITEM "&Gruvbox Dark",       IDM_THEME_GRUVBOX
+            MENUITEM SEPARATOR
+            MENUITEM "&Everforest Dark",    IDM_THEME_EVERFOREST_DARK
+            MENUITEM "Everforest &Light",   IDM_THEME_EVERFOREST_LIGHT
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "Zoom &In\tCtrl++",        IDM_VIEW_ZOOMIN
+        MENUITEM "Zoom &Out\tCtrl+-",       IDM_VIEW_ZOOMOUT
+        MENUITEM "Reset &Zoom\tCtrl+0",     IDM_VIEW_ZOOMRESET
+        MENUITEM SEPARATOR
+        MENUITEM "&Vim Mode\tCtrl+Shift+V", IDM_VIEW_VIMMODE
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&Help Contents\tF1",      IDM_HELP_CONTENTS
+        MENUITEM SEPARATOR
+        MENUITEM "&About",                  IDM_HELP_ABOUT
+    END
+END
+
+/* Accelerator Table for Keyboard Shortcuts */
+IDR_ACCEL ACCELERATORS
+BEGIN
+    /* File operations */
+    "N",    IDM_FILE_NEW,       VIRTKEY, CONTROL
+    "T",    IDM_FILE_NEWTAB,    VIRTKEY, CONTROL
+    "O",    IDM_FILE_OPEN,      VIRTKEY, CONTROL
+    "S",    IDM_FILE_SAVE,      VIRTKEY, CONTROL
+    "S",    IDM_FILE_SAVEAS,    VIRTKEY, CONTROL, SHIFT
+    "W",    IDM_FILE_CLOSETAB,  VIRTKEY, CONTROL
+    
+    /* Tab navigation */
+    VK_TAB, IDM_TAB_NEXT,       VIRTKEY, CONTROL
+    VK_TAB, IDM_TAB_PREV,       VIRTKEY, CONTROL, SHIFT
+    VK_PRIOR, IDM_TAB_PREV,     VIRTKEY, CONTROL  /* Ctrl+PageUp */
+    VK_NEXT, IDM_TAB_NEXT,      VIRTKEY, CONTROL  /* Ctrl+PageDown */
+    "1",    IDM_TAB_1,          VIRTKEY, CONTROL
+    "2",    IDM_TAB_2,          VIRTKEY, CONTROL
+    "3",    IDM_TAB_3,          VIRTKEY, CONTROL
+    "4",    IDM_TAB_4,          VIRTKEY, CONTROL
+    "5",    IDM_TAB_5,          VIRTKEY, CONTROL
+    "6",    IDM_TAB_6,          VIRTKEY, CONTROL
+    "7",    IDM_TAB_7,          VIRTKEY, CONTROL
+    "8",    IDM_TAB_8,          VIRTKEY, CONTROL
+    "9",    IDM_TAB_9,          VIRTKEY, CONTROL
+    
+    /* Edit operations */
+    "Z",    IDM_EDIT_UNDO,      VIRTKEY, CONTROL
+    "X",    IDM_EDIT_CUT,       VIRTKEY, CONTROL
+    "C",    IDM_EDIT_COPY,      VIRTKEY, CONTROL
+    "V",    IDM_EDIT_PASTE,     VIRTKEY, CONTROL
+    "A",    IDM_EDIT_SELECTALL, VIRTKEY, CONTROL
+    "F",    IDM_EDIT_FIND,      VIRTKEY, CONTROL
+    "H",    IDM_EDIT_REPLACE,   VIRTKEY, CONTROL
+    "G",    IDM_EDIT_GOTOLINE,  VIRTKEY, CONTROL
+    VK_F3,  IDM_EDIT_FINDNEXT,  VIRTKEY
+    
+    /* Line operations */
+    "D",    IDM_EDIT_DUPLICATELINE, VIRTKEY, CONTROL
+    "K",    IDM_EDIT_DELETELINE,    VIRTKEY, CONTROL, SHIFT
+    VK_UP,  IDM_EDIT_MOVELINEUP,    VIRTKEY, ALT
+    VK_DOWN, IDM_EDIT_MOVELINEDOWN, VIRTKEY, ALT
+    VK_OEM_2, IDM_EDIT_TOGGLECOMMENT, VIRTKEY, CONTROL  /* Ctrl+/ */
+    VK_F5,  IDM_EDIT_LOADMORE,      VIRTKEY  /* F5 - Load more content for partial files */
+
+    /* View operations */
+    "L",    IDM_VIEW_LINENUMBERS, VIRTKEY, CONTROL
+    "V",    IDM_VIEW_VIMMODE,   VIRTKEY, CONTROL, SHIFT
+    VK_OEM_PLUS, IDM_VIEW_ZOOMIN, VIRTKEY, CONTROL
+    VK_OEM_MINUS, IDM_VIEW_ZOOMOUT, VIRTKEY, CONTROL
+    "0",    IDM_VIEW_ZOOMRESET, VIRTKEY, CONTROL
+    
+    /* Format */
+    "Z",    IDM_FORMAT_WORDWRAP, VIRTKEY, ALT
+    "J",    IDM_FORMAT_JSON,    VIRTKEY, CONTROL, SHIFT
+    
+    /* Help */
+    VK_F1,  IDM_HELP_CONTENTS,  VIRTKEY
+END
+
+/* Find/Replace Dialog IDs */
+#define IDD_FINDREPLACE     500
+#define IDC_FIND_TEXT       501
+#define IDC_REPLACE_TEXT    502
+#define IDC_FIND_NEXT       503
+#define IDC_REPLACE         504
+#define IDC_REPLACE_ALL     505
+#define IDC_MATCH_CASE      506
+#define IDC_WHOLE_WORD      507
+
+/* Go to Line Dialog IDs */
+#define IDD_GOTOLINE        550
+#define IDC_GOTOLINE_EDIT   551
+#define IDC_GOTOLINE_INFO   552
+
+/* Progress Dialog IDs */
+#define IDD_PROGRESS        650
+#define IDC_PROGRESS_BAR    651
+#define IDC_PROGRESS_TEXT   652
+#define IDC_PROGRESS_CANCEL 653
+
+/* Help Dialog ID */
+#define IDD_HELP            600
+#define IDC_HELP_TEXT       601
+
+/* Find and Replace Dialog */
+IDD_FINDREPLACE DIALOGEX 0, 0, 280, 120
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Find and Replace"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "Find what:",1000,10,12,50,10
+    EDITTEXT        IDC_FIND_TEXT,65,10,140,14,ES_AUTOHSCROLL
+    LTEXT           "Replace with:",1001,10,32,50,10
+    EDITTEXT        IDC_REPLACE_TEXT,65,30,140,14,ES_AUTOHSCROLL
+    CONTROL         "Match case",IDC_MATCH_CASE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,55,60,10
+    CONTROL         "Whole word",IDC_WHOLE_WORD,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,80,55,60,10
+    DEFPUSHBUTTON   "Find Next",IDC_FIND_NEXT,215,10,55,14
+    PUSHBUTTON      "Replace",IDC_REPLACE,215,30,55,14
+    PUSHBUTTON      "Replace All",IDC_REPLACE_ALL,215,50,55,14
+    PUSHBUTTON      "Close",IDCANCEL,215,95,55,14
+END
+
+/* Go to Line Dialog */
+IDD_GOTOLINE DIALOGEX 0, 0, 200, 70
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Go to Line"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "Line number:",1200,10,12,50,10
+    EDITTEXT        IDC_GOTOLINE_EDIT,65,10,70,14,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "",IDC_GOTOLINE_INFO,10,30,180,10
+    DEFPUSHBUTTON   "Go",IDOK,85,50,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,140,50,50,14
+END
+
+/* Progress Dialog */
+IDD_PROGRESS DIALOGEX 0, 0, 280, 80
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
+CAPTION "Loading File"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "Loading file...",IDC_PROGRESS_TEXT,10,10,260,10
+    CONTROL         "",IDC_PROGRESS_BAR,"msctls_progress32",WS_BORDER,10,25,260,14
+    LTEXT           "Please wait while the file is being loaded.",1300,10,45,260,10
+    PUSHBUTTON      "Cancel",IDC_PROGRESS_CANCEL,115,60,50,14
+END
+
+/* Help Dialog */
+IDD_HELP DIALOGEX 0, 0, 420, 380
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "XNote Help - Keyboard Shortcuts"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "XNote - Fast and Lightweight Text Editor",1100,10,10,200,12
+    LTEXT           "Version 1.0",1101,10,22,100,10
+    
+    LTEXT           "FILE OPERATIONS",1102,10,42,100,10
+    LTEXT           "Ctrl+N",1103,20,56,50,10
+    LTEXT           "New document",1104,75,56,80,10
+    LTEXT           "Ctrl+T",1105,20,68,50,10
+    LTEXT           "New tab",1106,75,68,80,10
+    LTEXT           "Ctrl+O",1107,20,80,50,10
+    LTEXT           "Open file",1108,75,80,80,10
+    LTEXT           "Ctrl+S",1109,20,92,50,10
+    LTEXT           "Save file",1110,75,92,80,10
+    LTEXT           "Ctrl+Shift+S",1111,20,104,50,10
+    LTEXT           "Save As",1112,75,104,80,10
+    LTEXT           "Ctrl+W",1113,20,116,50,10
+    LTEXT           "Close tab",1114,75,116,80,10
+    
+    LTEXT           "TAB NAVIGATION",1115,10,136,100,10
+    LTEXT           "Ctrl+Tab",1116,20,150,50,10
+    LTEXT           "Next tab",1117,75,150,80,10
+    LTEXT           "Ctrl+Shift+Tab",1118,20,162,55,10
+    LTEXT           "Previous tab",1119,75,162,80,10
+    LTEXT           "Ctrl+1-9",1120,20,174,50,10
+    LTEXT           "Go to tab 1-9",1121,75,174,80,10
+    
+    LTEXT           "EDIT OPERATIONS",1122,170,42,100,10
+    LTEXT           "Ctrl+Z",1123,180,56,50,10
+    LTEXT           "Undo",1124,235,56,80,10
+    LTEXT           "Ctrl+X",1125,180,68,50,10
+    LTEXT           "Cut",1126,235,68,80,10
+    LTEXT           "Ctrl+C",1127,180,80,50,10
+    LTEXT           "Copy",1128,235,80,80,10
+    LTEXT           "Ctrl+V",1129,180,92,50,10
+    LTEXT           "Paste",1130,235,92,80,10
+    LTEXT           "Ctrl+A",1131,180,104,50,10
+    LTEXT           "Select all",1132,235,104,80,10
+    LTEXT           "Ctrl+D",1133,180,116,50,10
+    LTEXT           "Duplicate line",1134,235,116,80,10
+    LTEXT           "Ctrl+Shift+K",1135,180,128,50,10
+    LTEXT           "Delete line",1136,235,128,80,10
+    LTEXT           "Alt+Up/Down",1137,180,140,50,10
+    LTEXT           "Move line",1138,235,140,80,10
+    LTEXT           "Ctrl+/",1139,180,152,50,10
+    LTEXT           "Toggle comment",1140,235,152,80,10
+    
+    LTEXT           "FIND & NAVIGATION",1141,170,172,100,10
+    LTEXT           "Ctrl+F",1142,180,186,50,10
+    LTEXT           "Find",1143,235,186,80,10
+    LTEXT           "Ctrl+H",1144,180,198,50,10
+    LTEXT           "Find and Replace",1145,235,198,80,10
+    LTEXT           "F3",1146,180,210,50,10
+    LTEXT           "Find next",1147,235,210,80,10
+    LTEXT           "Ctrl+G",1148,180,222,50,10
+    LTEXT           "Go to line",1149,235,222,80,10
+    
+    LTEXT           "VIEW OPTIONS",1150,330,42,80,10
+    LTEXT           "Ctrl+L",1151,340,56,40,10
+    LTEXT           "Line numbers",1152,385,56,70,10
+    LTEXT           "Ctrl++",1153,340,68,40,10
+    LTEXT           "Zoom in",1154,385,68,70,10
+    LTEXT           "Ctrl+-",1155,340,80,40,10
+    LTEXT           "Zoom out",1156,385,80,70,10
+    LTEXT           "Ctrl+0",1157,340,92,40,10
+    LTEXT           "Reset zoom",1158,385,92,70,10
+    LTEXT           "Alt+Z",1159,340,104,40,10
+    LTEXT           "Word wrap",1160,385,104,70,10
+    LTEXT           "Ctrl+Shift+V",1161,340,116,50,10
+    LTEXT           "Vim mode",1162,385,116,70,10
+    
+    LTEXT           "VIM MODE KEYS",1163,330,136,80,10
+    LTEXT           "h/j/k/l",1164,340,150,40,10
+    LTEXT           "Move cursor",1165,385,150,70,10
+    LTEXT           "w/b/e",1166,340,162,40,10
+    LTEXT           "Word motion",1167,385,162,70,10
+    LTEXT           "0/$",1168,340,174,40,10
+    LTEXT           "Line start/end",1169,385,174,70,10
+    LTEXT           "gg/G",1170,340,186,40,10
+    LTEXT           "First/last line",1171,385,186,70,10
+    LTEXT           "i/a/o",1172,340,198,40,10
+    LTEXT           "Insert mode",1173,385,198,70,10
+    LTEXT           "v/V",1174,340,210,40,10
+    LTEXT           "Visual mode",1175,385,210,70,10
+    LTEXT           "d/y/p",1176,340,222,40,10
+    LTEXT           "Delete/yank/paste",1177,385,222,70,10
+    LTEXT           "Esc",1178,340,234,40,10
+    LTEXT           "Normal mode",1179,385,234,70,10
+    
+    LTEXT           "SUPPORTED FILE TYPES",1180,10,200,150,10
+    LTEXT           "C, C++, Java, JavaScript, TypeScript, Python, Go, Rust,",1181,20,214,300,10
+    LTEXT           "HTML, CSS, JSON, XML, YAML, SQL, PHP, Ruby, Shell,",1182,20,226,300,10
+    LTEXT           "Batch, PowerShell, Markdown, and more...",1183,20,238,300,10
+    
+    LTEXT           "TIPS",1184,10,258,100,10
+    LTEXT           "- Use Vim mode for efficient keyboard-only editing",1185,20,272,300,10
+    LTEXT           "- Ctrl+Tab cycles through open tabs quickly",1186,20,284,300,10
+    LTEXT           "- Alt+Up/Down moves entire lines without cut/paste",1187,20,296,300,10
+    LTEXT           "- Ctrl+D duplicates current line instantly",1188,20,308,300,10
+    LTEXT           "- Ctrl+G jumps to any line number",1189,20,320,300,10
+    
+    PUSHBUTTON      "OK",IDOK,180,355,60,14
+END
