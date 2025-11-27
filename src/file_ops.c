@@ -1429,6 +1429,10 @@ BOOL FileOpen(HWND hwnd) {
     /* Update status bar with file info - this will call GetWindowTextLength but it's ok now */
     UpdateStatusBar(hwnd);
 
+    /* Add to recent files list */
+    AddRecentFile(szFileName);
+    UpdateRecentFilesMenu(hwnd);
+
     /* Sync to session for persistence */
     SyncNewFileToSession(g_AppState.nCurrentTab);
 
@@ -1500,8 +1504,15 @@ BOOL FileSaveAs(HWND hwnd) {
     /* Detect language for new file */
     pTab->language = DetectLanguage(szFileName);
     
+    /* Update tab group based on file path */
+    UpdateTabGroup(g_AppState.nCurrentTab);
+    
     UpdateTabTitle(g_AppState.nCurrentTab);
     UpdateWindowTitle(hwnd);
+    
+    /* Add to recent files list */
+    AddRecentFile(szFileName);
+    UpdateRecentFilesMenu(hwnd);
     
     /* Sync to session */
     MarkSessionDirty();

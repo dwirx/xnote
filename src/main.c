@@ -697,8 +697,9 @@ int AddNewTab(HWND hwnd, const TCHAR* szTitle) {
         return -1;
     }
     
-    /* Create line number window if line numbers are enabled */
-    if (g_AppState.bShowLineNumbers) {
+    /* Create line number window if line numbers are enabled AND not in zen/distraction-free mode */
+    BOOL bHideLineNumbers = IsZenModeEnabled() || IsDistractionFreeModeEnabled();
+    if (g_AppState.bShowLineNumbers && !bHideLineNumbers) {
         g_AppState.tabs[nNewTab].lineNumState.hwndLineNumbers = CreateLineNumberWindow(hwnd, g_AppState.hInstance);
         g_AppState.tabs[nNewTab].lineNumState.bShowLineNumbers = TRUE;
         g_AppState.tabs[nNewTab].lineNumState.nLineNumberWidth = CalculateLineNumberWidth(1);
@@ -1003,8 +1004,9 @@ void SwitchToTab(HWND hwnd, int nTabIndex) {
     
     TabState* pTab = &g_AppState.tabs[nTabIndex];
     
-    /* Show line number window if enabled */
-    if (g_AppState.bShowLineNumbers) {
+    /* Show line number window if enabled AND not in zen/distraction-free mode */
+    BOOL bHideLineNumbers = IsZenModeEnabled() || IsDistractionFreeModeEnabled();
+    if (g_AppState.bShowLineNumbers && !bHideLineNumbers) {
         /* Create line number window if not exists */
         if (!pTab->lineNumState.hwndLineNumbers) {
             pTab->lineNumState.hwndLineNumbers = CreateLineNumberWindow(hwnd, g_AppState.hInstance);
@@ -1020,6 +1022,9 @@ void SwitchToTab(HWND hwnd, int nTabIndex) {
         if (pTab->lineNumState.hwndLineNumbers) {
             ShowWindow(pTab->lineNumState.hwndLineNumbers, SW_SHOW);
         }
+    } else if (bHideLineNumbers && pTab->lineNumState.hwndLineNumbers) {
+        /* Ensure line numbers are hidden in zen/distraction-free mode */
+        ShowWindow(pTab->lineNumState.hwndLineNumbers, SW_HIDE);
     }
     
     /* Show edit control */
@@ -1916,7 +1921,10 @@ void ToggleAutoSave(HWND hwnd) {
 /* Update recent files menu */
 void UpdateRecentFilesMenu(HWND hwnd) {
     HMENU hMenu = GetMenu(hwnd);
+    if (!hMenu) return; /* Menu may be NULL in Zen mode */
+    
     HMENU hFileMenu = GetSubMenu(hMenu, 0); /* File menu is first */
+    if (!hFileMenu) return;
     
     /* Find Recent Files submenu */
     int nCount = GetMenuItemCount(hFileMenu);
@@ -2085,14 +2093,16 @@ void ToggleDistractionFreeMode(HWND hwnd) {
         
         /* Reinitialize menu checkmarks */
         HMENU hMenu = GetMenu(hwnd);
-        CheckMenuItem(hMenu, IDM_VIEW_LINENUMBERS, g_AppState.bShowLineNumbers ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_VIEW_RELATIVENUM, g_AppState.bRelativeLineNumbers ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_FORMAT_WORDWRAP, g_AppState.bWordWrap ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_VIEW_SYNTAX, g_bSyntaxHighlight ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_AUTO_FORMAT_JSON, IsAutoFormatJsonEnabled() ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_VIEW_STAYONTOP, IsStayOnTopEnabled() ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_FILE_AUTOSAVE, IsAutoSaveEnabled() ? MF_CHECKED : MF_UNCHECKED);
-        UpdateRecentFilesMenu(hwnd);
+        if (hMenu) {
+            CheckMenuItem(hMenu, IDM_VIEW_LINENUMBERS, g_AppState.bShowLineNumbers ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_VIEW_RELATIVENUM, g_AppState.bRelativeLineNumbers ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_FORMAT_WORDWRAP, g_AppState.bWordWrap ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_VIEW_SYNTAX, g_bSyntaxHighlight ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_AUTO_FORMAT_JSON, IsAutoFormatJsonEnabled() ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_VIEW_STAYONTOP, IsStayOnTopEnabled() ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_FILE_AUTOSAVE, IsAutoSaveEnabled() ? MF_CHECKED : MF_UNCHECKED);
+            UpdateRecentFilesMenu(hwnd);
+        }
     }
     
     /* Reposition controls */
@@ -2143,15 +2153,17 @@ void ToggleZenMode(HWND hwnd) {
         
         /* Reinitialize menu checkmarks */
         HMENU hMenu = GetMenu(hwnd);
-        CheckMenuItem(hMenu, IDM_VIEW_LINENUMBERS, g_AppState.bShowLineNumbers ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_VIEW_RELATIVENUM, g_AppState.bRelativeLineNumbers ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_FORMAT_WORDWRAP, g_AppState.bWordWrap ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_VIEW_SYNTAX, g_bSyntaxHighlight ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_AUTO_FORMAT_JSON, IsAutoFormatJsonEnabled() ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_VIEW_STAYONTOP, IsStayOnTopEnabled() ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_FILE_AUTOSAVE, IsAutoSaveEnabled() ? MF_CHECKED : MF_UNCHECKED);
-        CheckMenuItem(hMenu, IDM_VIEW_ZEN_MODE, MF_UNCHECKED);
-        UpdateRecentFilesMenu(hwnd);
+        if (hMenu) {
+            CheckMenuItem(hMenu, IDM_VIEW_LINENUMBERS, g_AppState.bShowLineNumbers ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_VIEW_RELATIVENUM, g_AppState.bRelativeLineNumbers ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_FORMAT_WORDWRAP, g_AppState.bWordWrap ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_VIEW_SYNTAX, g_bSyntaxHighlight ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_AUTO_FORMAT_JSON, IsAutoFormatJsonEnabled() ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_VIEW_STAYONTOP, IsStayOnTopEnabled() ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_FILE_AUTOSAVE, IsAutoSaveEnabled() ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem(hMenu, IDM_VIEW_ZEN_MODE, MF_UNCHECKED);
+            UpdateRecentFilesMenu(hwnd);
+        }
     }
     
     /* Reposition controls */

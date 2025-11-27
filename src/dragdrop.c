@@ -1,4 +1,5 @@
 #include "notepad.h"
+#include "syntax.h"
 #include <shellapi.h>
 #include <shlwapi.h>
 
@@ -156,8 +157,11 @@ void DragDrop_HandleFiles(HWND hwnd, HDROP hDrop) {
                 _tcscpy(pTab->szFileName, szFileName);
                 pTab->bUntitled = FALSE;
                 pTab->bModified = FALSE;
+                pTab->language = DetectLanguage(szFileName);
+                UpdateTabGroup(g_AppState.nCurrentTab);
                 UpdateTabTitle(g_AppState.nCurrentTab);
                 UpdateWindowTitle(hwnd);
+                AddRecentFile(szFileName);
                 nLastOpenedTab = g_AppState.nCurrentTab;
                 bAnyOpened = TRUE;
             }
@@ -170,8 +174,11 @@ void DragDrop_HandleFiles(HWND hwnd, HDROP hDrop) {
                     _tcscpy(pTab->szFileName, szFileName);
                     pTab->bUntitled = FALSE;
                     pTab->bModified = FALSE;
+                    pTab->language = DetectLanguage(szFileName);
+                    UpdateTabGroup(nNewTab);
                     UpdateTabTitle(nNewTab);
                     UpdateWindowTitle(hwnd);
+                    AddRecentFile(szFileName);
                     nLastOpenedTab = nNewTab;
                     bAnyOpened = TRUE;
                 } else {
@@ -185,6 +192,7 @@ void DragDrop_HandleFiles(HWND hwnd, HDROP hDrop) {
     /* Switch to last opened tab */
     if (bAnyOpened && nLastOpenedTab >= 0) {
         SwitchToTab(hwnd, nLastOpenedTab);
+        UpdateRecentFilesMenu(hwnd);
     }
     
     DragFinish(hDrop);
