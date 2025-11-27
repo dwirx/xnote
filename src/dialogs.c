@@ -64,7 +64,7 @@ int ShowConfirmSaveDialog(HWND hwnd) {
 }
 
 void ShowAboutDialog(HWND hwnd) {
-    MessageBox(hwnd, TEXT("XNote Version 1.0\n\nA fast text editor.\n\nPress F1 for shortcuts."), TEXT("About"), MB_OK | MB_ICONINFORMATION);
+    MessageBox(hwnd, TEXT("XNote Version 2.0.1\n\nA fast text editor with sticky notes.\n\nPress F1 for shortcuts."), TEXT("About"), MB_OK | MB_ICONINFORMATION);
 }
 
 void ShowErrorDialog(HWND hwnd, const TCHAR* szMessage) {

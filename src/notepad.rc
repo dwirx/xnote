@@ -344,7 +344,7 @@ CAPTION "XNote Help - Keyboard Shortcuts"
 FONT 9, "Segoe UI"
 BEGIN
     LTEXT           "XNote - Fast and Lightweight Text Editor",1100,10,10,200,12
-    LTEXT           "Version 1.0",1101,10,22,100,10
+    LTEXT           "Version 2.0.1",1101,10,22,100,10
     
     LTEXT           "FILE OPERATIONS",1102,10,42,100,10
     LTEXT           "Ctrl+N",1103,20,56,50,10
