@@ -6,6 +6,7 @@
 #include "sticky_notes.h"
 #include "notepad.h"
 #include "resource.h"
+#include "vim_mode.h"
 #include <shlobj.h>
 #include <stdio.h>
 #include <windowsx.h>
@@ -62,6 +63,34 @@ static void EscapeJsonStr(const TCHAR* src, char* dest, int destSize);
 static int ParseJsonIntValue(const char* json, const char* key, int def);
 static BOOL ParseJsonBoolValue(const char* json, const char* key, BOOL def);
 static void ParseJsonStringValue(const char* json, const char* key, TCHAR* dest, int destSize);
+
+/* Subclass ID for edit control */
+#define STICKY_EDIT_SUBCLASS_ID 1
+
+/* Subclass procedure for edit control to handle Vim keys */
+static LRESULT CALLBACK StickyEditSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam,
+                                                UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    (void)uIdSubclass;  /* Unused parameter */
+    (void)dwRefData;    /* Unused parameter - note index for future use */
+    
+    /* Handle keyboard messages for Vim mode */
+    if (IsVimModeEnabled()) {
+        if (msg == WM_KEYDOWN || msg == WM_CHAR || msg == WM_SYSKEYDOWN) {
+            /* Let ProcessVimKey handle the input */
+            if (ProcessVimKey(hwnd, msg, wParam, lParam)) {
+                /* Vim handled the key - refresh parent window title bar */
+                HWND hwndParent = GetParent(hwnd);
+                if (hwndParent) {
+                    InvalidateRect(hwndParent, NULL, FALSE);
+                }
+                return 0;
+            }
+        }
+    }
+    
+    /* Default processing */
+    return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
 
 /* Get color RGB value */
 COLORREF StickyNotes_GetColorRGB(StickyNoteColor color) {
@@ -927,6 +956,10 @@ LRESULT CALLBACK StickyNoteWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
                 
                 /* Set text limit */
                 SendMessage(pNote->hwndEdit, EM_SETLIMITTEXT, STICKY_NOTE_MAX_CONTENT - 1, 0);
+                
+                /* Subclass edit control for Vim mode support */
+                SetWindowSubclass(pNote->hwndEdit, StickyEditSubclassProc, 
+                                  STICKY_EDIT_SUBCLASS_ID, (DWORD_PTR)nIndex);
             }
             
             return 0;
@@ -995,9 +1028,13 @@ LRESULT CALLBACK StickyNoteWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             SelectObject(hdc, hOldPen);
             DeleteObject(hPen);
             
-            /* Draw title text */
-            TCHAR szTitle[64];
-            wsprintf(szTitle, TEXT("📝 Note %d"), pNote->nNoteId);
+            /* Draw title text with Vim mode indicator */
+            TCHAR szTitle[96];
+            if (IsVimModeEnabled()) {
+                wsprintf(szTitle, TEXT("📝 Note %d [%s]"), pNote->nNoteId, GetVimModeString());
+            } else {
+                wsprintf(szTitle, TEXT("📝 Note %d"), pNote->nNoteId);
+            }
             
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, RGB(50, 50, 50));
@@ -1193,6 +1230,8 @@ LRESULT CALLBACK StickyNoteWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             if (nIndex >= 0 && nIndex < g_StickyManager.nNoteCount) {
                 StickyNote* pNote = &g_StickyManager.notes[nIndex];
                 if (pNote->hwndEdit && IsWindow(pNote->hwndEdit)) {
+                    /* Remove subclass before destroying */
+                    RemoveWindowSubclass(pNote->hwndEdit, StickyEditSubclassProc, STICKY_EDIT_SUBCLASS_ID);
                     GetWindowText(pNote->hwndEdit, pNote->szContent, STICKY_NOTE_MAX_CONTENT);
                 }
             }
