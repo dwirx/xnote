@@ -190,6 +190,7 @@ BEGIN
         MENUITEM "New &Sticky Note\tCtrl+Shift+N", IDM_VIEW_STICKYNOTE
         MENUITEM "&Manage Sticky Notes...\tCtrl+Shift+M", 285
         MENUITEM SEPARATOR
+        MENUITEM "&Toggle All Sticky Notes\tCtrl+Shift+H", 298
         MENUITEM "S&how All Sticky Notes", 286
         MENUITEM "Hi&de All Sticky Notes", 287
     END
@@ -272,6 +273,9 @@ BEGIN
     
     /* Manage sticky notes - Ctrl+Shift+M */
     "M",    285, VIRTKEY, CONTROL, SHIFT
+    
+    /* Toggle sticky notes visibility - Ctrl+Shift+H */
+    "H",    298, VIRTKEY, CONTROL, SHIFT
 END
 
 /* Find/Replace Dialog IDs */

@@ -1678,6 +1678,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     StickyNotes_HideAll();
                     break;
                 
+                case IDM_VIEW_TOGGLE_STICKYNOTES:
+                    StickyNotes_ToggleAll();
+                    break;
+                
                 /* Theme selection */
                 case IDM_THEME_LIGHT:
                     SetTheme(THEME_LIGHT);

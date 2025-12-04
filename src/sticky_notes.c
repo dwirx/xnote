@@ -465,6 +465,22 @@ void StickyNotes_HideAll(void) {
     StickyNotes_Save();
 }
 
+/* Toggle visibility of all sticky notes */
+void StickyNotes_ToggleAll(void) {
+    if (g_StickyManager.nNoteCount == 0) return;
+    
+    /* Check if any notes are visible */
+    int nVisibleCount = StickyNotes_GetVisibleCount();
+    
+    if (nVisibleCount > 0) {
+        /* Some notes visible - hide all */
+        StickyNotes_HideAll();
+    } else {
+        /* All notes hidden - show all */
+        StickyNotes_ShowAll();
+    }
+}
+
 /* Get count of hidden notes */
 int StickyNotes_GetHiddenCount(void) {
     int count = 0;

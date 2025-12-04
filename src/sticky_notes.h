@@ -85,6 +85,7 @@ const TCHAR* StickyNotes_GetContent(int nIndex);
 /* Visibility control */
 void StickyNotes_ShowAll(void);
 void StickyNotes_HideAll(void);
+void StickyNotes_ToggleAll(void);
 
 /* Hide/Restore functions - NEW */
 void StickyNotes_Hide(int nIndex);
