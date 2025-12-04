@@ -1258,10 +1258,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         
         case WM_SIZE: {
             /* Handle sticky notes visibility on minimize/restore */
+            /* Only auto-show/hide if auto-open is enabled */
             if (wParam == SIZE_MINIMIZED) {
+                /* Always hide when minimized */
                 StickyNotes_HideAll();
             } else if (wParam == SIZE_RESTORED || wParam == SIZE_MAXIMIZED) {
-                StickyNotes_ShowAll();
+                /* Only show if auto-open is enabled */
+                if (StickyNotes_GetAutoOpen()) {
+                    StickyNotes_ShowAll();
+                }
             }
             /* Debounce resize - use timer to avoid too many redraws */
             SetTimer(hwnd, 3, 16, NULL); /* ~60fps */
@@ -1469,6 +1474,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     int visibleCount = StickyNotes_GetVisibleCount();
                     EnableMenuItem(hMenu, IDM_VIEW_HIDEALL_STICKYNOTES, 
                                    visibleCount > 0 ? MF_ENABLED : MF_GRAYED);
+                }
+                if (id == IDM_VIEW_STICKYNOTES_AUTOOPEN) {
+                    /* Check/uncheck Auto-Open based on current setting */
+                    CheckMenuItem(hMenu, IDM_VIEW_STICKYNOTES_AUTOOPEN,
+                                  StickyNotes_GetAutoOpen() ? MF_CHECKED : MF_UNCHECKED);
                 }
             }
             break;
@@ -1680,6 +1690,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 
                 case IDM_VIEW_TOGGLE_STICKYNOTES:
                     StickyNotes_ToggleAll();
+                    break;
+                
+                case IDM_VIEW_STICKYNOTES_AUTOOPEN:
+                    StickyNotes_ToggleAutoOpen();
                     break;
                 
                 /* Theme selection */

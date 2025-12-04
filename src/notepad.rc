@@ -72,6 +72,7 @@ IDI_APPICON ICON "icons/xnote.ico"
 #define IDM_FILE_RECENT_10  139
 #define IDM_FILE_EXPORT_STICKYNOTES  140
 #define IDM_FILE_IMPORT_STICKYNOTES  141
+#define IDM_VIEW_STICKYNOTES_AUTOOPEN 299
 #define IDM_THEME_LIGHT         270
 #define IDM_THEME_DARK          271
 #define IDM_THEME_TOKYO_NIGHT   272
@@ -189,6 +190,7 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "New &Sticky Note\tCtrl+Shift+N", IDM_VIEW_STICKYNOTE
         MENUITEM "&Manage Sticky Notes...\tCtrl+Shift+M", 285
+        MENUITEM "Auto-&Open Sticky Notes", IDM_VIEW_STICKYNOTES_AUTOOPEN
         MENUITEM SEPARATOR
         MENUITEM "&Toggle All Sticky Notes\tCtrl+Shift+H", 298
         MENUITEM "S&how All Sticky Notes", 286

@@ -193,4 +193,7 @@
 #define IDM_FILE_EXPORT_STICKYNOTES  140
 #define IDM_FILE_IMPORT_STICKYNOTES  141
 
+/* Sticky Notes Auto-Open setting */
+#define IDM_VIEW_STICKYNOTES_AUTOOPEN 299
+
 #endif /* RESOURCE_H */

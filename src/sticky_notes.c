@@ -116,6 +116,7 @@ void StickyNotes_Init(HWND hwndParent, HINSTANCE hInstance) {
     g_StickyManager.hInstance = hInstance;
     g_StickyManager.nNoteCount = 0;
     g_StickyManager.nNextNoteId = 1;
+    g_StickyManager.bAutoOpen = TRUE;  /* Default: auto-open enabled */
     
     /* Initialize all notes */
     for (int i = 0; i < MAX_STICKY_NOTES; i++) {
@@ -439,11 +440,28 @@ const TCHAR* StickyNotes_GetContent(int nIndex) {
 /* Show all sticky notes (restore all hidden) */
 void StickyNotes_ShowAll(void) {
     for (int i = 0; i < g_StickyManager.nNoteCount; i++) {
-        if (g_StickyManager.notes[i].hwndNote) {
-            if (!g_StickyManager.notes[i].bVisible) {
-                g_StickyManager.notes[i].bVisible = TRUE;
+        StickyNote* pNote = &g_StickyManager.notes[i];
+        
+        /* If window doesn't exist, create it */
+        if (!pNote->hwndNote && pNote->nNoteId > 0) {
+            pNote->hwndNote = CreateWindowEx(
+                WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+                TEXT("XNoteStickyNote"),
+                TEXT(""),
+                WS_POPUP | WS_THICKFRAME | WS_VISIBLE,
+                pNote->nPosX, pNote->nPosY,
+                pNote->nWidth, pNote->nHeight,
+                g_StickyManager.hwndParent,
+                NULL,
+                g_StickyManager.hInstance,
+                (LPVOID)(LONG_PTR)i
+            );
+            if (pNote->hwndNote) {
+                pNote->bVisible = TRUE;
             }
-            ShowWindow(g_StickyManager.notes[i].hwndNote, SW_SHOWNOACTIVATE);
+        } else if (pNote->hwndNote) {
+            pNote->bVisible = TRUE;
+            ShowWindow(pNote->hwndNote, SW_SHOWNOACTIVATE);
         }
     }
     StickyNotes_Save();
@@ -634,6 +652,7 @@ void StickyNotes_Save(void) {
     
     fprintf(fp, "{\n");
     fprintf(fp, "  \"nextNoteId\": %d,\n", g_StickyManager.nNextNoteId);
+    fprintf(fp, "  \"autoOpen\": %s,\n", g_StickyManager.bAutoOpen ? "true" : "false");
     fprintf(fp, "  \"stickyNotes\": [\n");
     
     int validNoteCount = 0;
@@ -794,6 +813,19 @@ void StickyNotes_Load(void) {
     /* Parse nextNoteId */
     g_StickyManager.nNextNoteId = ParseJsonIntValue(json, "nextNoteId", 1);
     
+    /* Parse autoOpen setting - check if key exists */
+    /* Search for "autoOpen" in the JSON */
+    const char* autoOpenKey = strstr(json, "\"autoOpen\"");
+    if (autoOpenKey) {
+        g_StickyManager.bAutoOpen = ParseJsonBoolValue(json, "autoOpen", TRUE);
+    } else {
+        /* Key doesn't exist in old JSON files, default to TRUE */
+        g_StickyManager.bAutoOpen = TRUE;
+    }
+    
+    /* If autoOpen is disabled, just load note data but don't create windows */
+    BOOL bCreateWindows = g_StickyManager.bAutoOpen;
+    
     /* Find stickyNotes array */
     const char* pNotes = strstr(json, "\"stickyNotes\"");
     if (!pNotes) {
@@ -853,24 +885,34 @@ void StickyNotes_Load(void) {
         if (pNote->nPosY + pNote->nHeight > rcWork.bottom) 
             pNote->nPosY = rcWork.bottom - pNote->nHeight - 20;
         
-        pNote->hwndNote = CreateWindowEx(
-            WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-            szStickyNoteClass,
-            TEXT(""),
-            WS_POPUP | WS_THICKFRAME | (pNote->bVisible ? WS_VISIBLE : 0),
-            pNote->nPosX, pNote->nPosY,
-            pNote->nWidth, pNote->nHeight,
-            g_StickyManager.hwndParent,
-            NULL,
-            g_StickyManager.hInstance,
-            (LPVOID)(LONG_PTR)nIndex
-        );
-        
-        if (pNote->hwndNote) {
-            g_StickyManager.nNoteCount++;
-            if (pNote->nNoteId >= g_StickyManager.nNextNoteId) {
-                g_StickyManager.nNextNoteId = pNote->nNoteId + 1;
+        /* Only create window if autoOpen is enabled */
+        if (bCreateWindows) {
+            /* Create window as visible */
+            pNote->hwndNote = CreateWindowEx(
+                WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+                szStickyNoteClass,
+                TEXT(""),
+                WS_POPUP | WS_THICKFRAME | WS_VISIBLE,
+                pNote->nPosX, pNote->nPosY,
+                pNote->nWidth, pNote->nHeight,
+                g_StickyManager.hwndParent,
+                NULL,
+                g_StickyManager.hInstance,
+                (LPVOID)(LONG_PTR)nIndex
+            );
+            
+            if (pNote->hwndNote) {
+                pNote->bVisible = TRUE;
             }
+        } else {
+            /* Don't create window, just mark as hidden */
+            pNote->hwndNote = NULL;
+            pNote->bVisible = FALSE;
+        }
+        
+        g_StickyManager.nNoteCount++;
+        if (pNote->nNoteId >= g_StickyManager.nNextNoteId) {
+            g_StickyManager.nNextNoteId = pNote->nNoteId + 1;
         }
         
         HeapFree(GetProcessHeap(), 0, objStr);
@@ -1744,4 +1786,30 @@ int StickyNotes_Import(HWND hwndParent) {
     MessageBox(hwndParent, szMsg, TEXT("Import Complete"), MB_OK | MB_ICONINFORMATION);
     
     return importedCount;
+}
+
+/* Get auto-open setting */
+BOOL StickyNotes_GetAutoOpen(void) {
+    return g_StickyManager.bAutoOpen;
+}
+
+/* Set auto-open setting */
+void StickyNotes_SetAutoOpen(BOOL bAutoOpen) {
+    g_StickyManager.bAutoOpen = bAutoOpen;
+    StickyNotes_Save();
+}
+
+/* Toggle auto-open setting */
+void StickyNotes_ToggleAutoOpen(void) {
+    g_StickyManager.bAutoOpen = !g_StickyManager.bAutoOpen;
+    
+    /* If auto-open was just disabled, hide all notes immediately */
+    if (!g_StickyManager.bAutoOpen) {
+        StickyNotes_HideAll();
+    } else {
+        /* If auto-open was just enabled, show all notes */
+        StickyNotes_ShowAll();
+    }
+    
+    StickyNotes_Save();
 }

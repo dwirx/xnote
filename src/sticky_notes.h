@@ -62,6 +62,7 @@ typedef struct {
     HWND hwndParent;                        /* Parent window (main XNote window) */
     HINSTANCE hInstance;
     BOOL bInitialized;
+    BOOL bAutoOpen;                         /* Auto-open sticky notes on startup */
 } StickyNotesManager;
 
 /* Initialization and cleanup */
@@ -111,6 +112,11 @@ void StickyNotes_UpdateStatusBar(HWND hwndStatusBar, int nPart);
 void StickyNotes_Save(void);
 void StickyNotes_Load(void);
 void StickyNotes_ForceSave(void);
+
+/* Auto-open setting */
+BOOL StickyNotes_GetAutoOpen(void);
+void StickyNotes_SetAutoOpen(BOOL bAutoOpen);
+void StickyNotes_ToggleAutoOpen(void);
 
 /* Export/Import */
 BOOL StickyNotes_Export(HWND hwndParent);
