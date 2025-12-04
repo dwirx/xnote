@@ -1,0 +1,140 @@
+# =============================================================================
+# Makefile.wsl - XNote WSL Cross-Compilation Makefile
+# For building Windows executable from WSL using MinGW-w64
+# =============================================================================
+
+# Cross-compiler settings
+CC = x86_64-w64-mingw32-gcc
+RC = x86_64-w64-mingw32-windres
+
+# Directories
+SRC_DIR = src
+BUILD_DIR = build
+
+# Output
+TARGET = xnote.exe
+
+# Compiler flags for Win32 (optimized)
+CFLAGS = -Wall -Wextra -O3 -DUNICODE -D_UNICODE
+LDFLAGS = -mwindows -lcomctl32 -lcomdlg32 -lshell32 -lshlwapi -ld2d1 -ldwrite -lpsapi -lole32 -s
+
+# Source files
+SRCS = $(SRC_DIR)/main.c \
+       $(SRC_DIR)/file_ops.c \
+       $(SRC_DIR)/edit_ops.c \
+       $(SRC_DIR)/dialogs.c \
+       $(SRC_DIR)/line_numbers.c \
+       $(SRC_DIR)/statusbar.c \
+       $(SRC_DIR)/syntax.c \
+       $(SRC_DIR)/vim_mode.c \
+       $(SRC_DIR)/session.c \
+       $(SRC_DIR)/theme.c \
+       $(SRC_DIR)/json_format.c \
+       $(SRC_DIR)/settings.c \
+       $(SRC_DIR)/multi_cursor.c \
+       $(SRC_DIR)/dragdrop.c \
+       $(SRC_DIR)/performance.c \
+       $(SRC_DIR)/sticky_notes.c
+
+# Object files (in build directory)
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
+
+# Resource files
+RES_SRC = $(SRC_DIR)/notepad.rc
+RES_OBJ = $(BUILD_DIR)/notepad.res.o
+
+# Phony targets
+.PHONY: all clean rebuild run check-deps help
+
+# Default target
+all: check-deps $(BUILD_DIR) $(TARGET)
+	@echo ""
+	@echo "============================================="
+	@echo "  Build Successful!"
+	@echo "============================================="
+	@echo "Output: $(TARGET)"
+	@echo "Size:   $$(du -h $(TARGET) | cut -f1)"
+	@echo ""
+
+# Create build directory
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
+
+# Link executable
+$(TARGET): $(OBJS) $(RES_OBJ)
+	@echo "Linking $(TARGET)..."
+	@$(CC) $(OBJS) $(RES_OBJ) -o $(TARGET) $(LDFLAGS)
+
+# Compile C source files
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile resources
+$(RES_OBJ): $(RES_SRC) | $(BUILD_DIR)
+	@echo "Compiling resources..."
+	@$(RC) $(RES_SRC) -o $(RES_OBJ)
+
+# Check dependencies
+check-deps:
+	@command -v $(CC) >/dev/null 2>&1 || { \
+		echo "Error: MinGW-w64 not found!"; \
+		echo "Install with: sudo apt install mingw-w64"; \
+		exit 1; \
+	}
+
+# Clean build artifacts
+clean:
+	@echo "Cleaning..."
+	@rm -rf $(BUILD_DIR)
+	@rm -f $(TARGET)
+	@rm -f $(SRC_DIR)/*.o
+	@echo "Clean complete"
+
+# Rebuild
+rebuild: clean all
+
+# Run (if on WSL with Windows interop)
+run: $(TARGET)
+	@if command -v cmd.exe >/dev/null 2>&1; then \
+		echo "Running $(TARGET)..."; \
+		cmd.exe /c $(TARGET); \
+	else \
+		echo "Cannot run: Windows interop not available"; \
+		echo "Copy $(TARGET) to Windows and run manually"; \
+	fi
+
+# Help
+help:
+	@echo "XNote WSL Build System"
+	@echo ""
+	@echo "Usage: make -f Makefile.wsl [target]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  all        Build the project (default)"
+	@echo "  clean      Remove build artifacts"
+	@echo "  rebuild    Clean and rebuild"
+	@echo "  run        Run the executable (WSL with Windows interop)"
+	@echo "  help       Show this help message"
+	@echo ""
+	@echo "Requirements:"
+	@echo "  MinGW-w64: sudo apt install mingw-w64"
+	@echo ""
+
+# Dependencies (header files)
+$(BUILD_DIR)/main.o: $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h $(SRC_DIR)/vim_mode.h $(SRC_DIR)/session.h $(SRC_DIR)/theme.h
+$(BUILD_DIR)/file_ops.o: $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/edit_ops.o: $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/dialogs.o: $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/line_numbers.o: $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/statusbar.o: $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/syntax.o: $(SRC_DIR)/notepad.h $(SRC_DIR)/syntax.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/vim_mode.o: $(SRC_DIR)/vim_mode.h $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/session.o: $(SRC_DIR)/session.h $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/theme.o: $(SRC_DIR)/theme.h $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/json_format.o: $(SRC_DIR)/json_format.h $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/settings.o: $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/multi_cursor.o: $(SRC_DIR)/multi_cursor.h $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/dragdrop.o: $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/performance.o: $(SRC_DIR)/performance.h $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
+$(BUILD_DIR)/sticky_notes.o: $(SRC_DIR)/sticky_notes.h $(SRC_DIR)/notepad.h $(SRC_DIR)/resource.h
