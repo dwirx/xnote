@@ -114,6 +114,35 @@ static int GetCurrentCol(HWND hwndEdit) {
     return (int)(pos - lineStart);
 }
 
+/* Calculate how many screen lines are visible using the current font */
+static int GetVisibleLineCount(HWND hwndEdit) {
+    RECT rc = {0};
+    if (!GetClientRect(hwndEdit, &rc)) return 1;
+    
+    HDC hdc = GetDC(hwndEdit);
+    if (!hdc) return 1;
+    
+    HFONT hFont = (HFONT)SendMessage(hwndEdit, WM_GETFONT, 0, 0);
+    HFONT hOld = NULL;
+    if (hFont) {
+        hOld = (HFONT)SelectObject(hdc, hFont);
+    }
+    
+    TEXTMETRIC tm = {0};
+    BOOL bGotMetrics = GetTextMetrics(hdc, &tm);
+    
+    if (hOld) {
+        SelectObject(hdc, hOld);
+    }
+    ReleaseDC(hwndEdit, hdc);
+    
+    int lineHeight = bGotMetrics ? tm.tmHeight : 16;
+    if (lineHeight <= 0) lineHeight = 16;
+    
+    int visible = (rc.bottom - rc.top + lineHeight - 1) / lineHeight; /* include partial line */
+    return (visible > 0) ? visible : 1;
+}
+
 /* Get text buffer - works with both Edit and RichEdit controls */
 static TCHAR* GetTextBuffer(HWND hwndEdit, DWORD* pLen) {
     /* Get text length */
@@ -580,10 +609,7 @@ void VimMoveScreenTop(HWND hwndEdit) {
 /* M - move to middle of screen */
 void VimMoveScreenMiddle(HWND hwndEdit) {
     int firstLine = (int)SendMessage(hwndEdit, EM_GETFIRSTVISIBLELINE, 0, 0);
-    RECT rc;
-    GetClientRect(hwndEdit, &rc);
-    int visibleLines = (rc.bottom - rc.top) / 16;
-    if (visibleLines < 1) visibleLines = 20;
+    int visibleLines = GetVisibleLineCount(hwndEdit);
     
     int middleLine = firstLine + visibleLines / 2;
     int totalLines = GetLineCount(hwndEdit);
@@ -602,10 +628,7 @@ void VimMoveScreenMiddle(HWND hwndEdit) {
 /* L - move to bottom of screen */
 void VimMoveScreenBottom(HWND hwndEdit) {
     int firstLine = (int)SendMessage(hwndEdit, EM_GETFIRSTVISIBLELINE, 0, 0);
-    RECT rc;
-    GetClientRect(hwndEdit, &rc);
-    int visibleLines = (rc.bottom - rc.top) / 16;
-    if (visibleLines < 1) visibleLines = 20;
+    int visibleLines = GetVisibleLineCount(hwndEdit);
     
     int bottomLine = firstLine + visibleLines - 1;
     int totalLines = GetLineCount(hwndEdit);
@@ -720,6 +743,83 @@ void VimToggleCase(HWND hwndEdit) {
 }
 
 /* ============ Text Objects ============ */
+
+static void ClearPendingOperator(void) {
+    g_VimState.chPendingOp = 0;
+    g_VimState.nRepeatCount = 0;
+}
+
+static BOOL HandleRepeatCount(TCHAR ch) {
+    if (ch >= TEXT('1') && ch <= TEXT('9')) {
+        g_VimState.nRepeatCount = g_VimState.nRepeatCount * 10 + (ch - TEXT('0'));
+        return TRUE;
+    }
+    if (ch == TEXT('0') && g_VimState.nRepeatCount > 0) {
+        g_VimState.nRepeatCount *= 10;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static BOOL StartTextObjectPending(TCHAR ch) {
+    if (g_VimState.chPendingOp == TEXT('d') || g_VimState.chPendingOp == TEXT('y') ||
+        g_VimState.chPendingOp == TEXT('c')) {
+        if (ch == TEXT('i') || ch == TEXT('a')) {
+            g_VimState.szLastCommand[0] = g_VimState.chPendingOp;
+            g_VimState.szLastCommand[1] = ch;
+            g_VimState.szLastCommand[2] = TEXT('\0');
+            g_VimState.chPendingOp = (ch == TEXT('i')) ? TEXT('I') : TEXT('A'); /* markers */
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static BOOL ApplyTextObjectIfPending(HWND hwndEdit, TCHAR ch) {
+    if (g_VimState.chPendingOp != TEXT('I') && g_VimState.chPendingOp != TEXT('A')) {
+        return FALSE;
+    }
+    
+    TCHAR chOp = g_VimState.szLastCommand[0];
+    BOOL bInner = (g_VimState.chPendingOp == TEXT('I'));
+    TextObjectRange range = {0, 0, FALSE};
+    
+    switch (ch) {
+        case TEXT('w'):
+            range = bInner ? VimSelectInnerWord(hwndEdit) : VimSelectAWord(hwndEdit);
+            break;
+        case TEXT('"'):
+            range = bInner ? VimSelectInnerQuote(hwndEdit, TEXT('"')) : VimSelectAQuote(hwndEdit, TEXT('"'));
+            break;
+        case TEXT('\''):
+            range = bInner ? VimSelectInnerQuote(hwndEdit, TEXT('\'')) : VimSelectAQuote(hwndEdit, TEXT('\''));
+            break;
+        case TEXT('('):
+        case TEXT(')'):
+        case TEXT('b'):
+            range = bInner ? VimSelectInnerBracket(hwndEdit, TEXT('('), TEXT(')')) : VimSelectABracket(hwndEdit, TEXT('('), TEXT(')'));
+            break;
+        case TEXT('{'):
+        case TEXT('}'):
+        case TEXT('B'):
+            range = bInner ? VimSelectInnerBracket(hwndEdit, TEXT('{'), TEXT('}')) : VimSelectABracket(hwndEdit, TEXT('{'), TEXT('}'));
+            break;
+        case TEXT('['):
+        case TEXT(']'):
+            range = bInner ? VimSelectInnerBracket(hwndEdit, TEXT('['), TEXT(']')) : VimSelectABracket(hwndEdit, TEXT('['), TEXT(']'));
+            break;
+        case TEXT('<'):
+        case TEXT('>'):
+            range = bInner ? VimSelectInnerBracket(hwndEdit, TEXT('<'), TEXT('>')) : VimSelectABracket(hwndEdit, TEXT('<'), TEXT('>'));
+            break;
+    }
+    
+    if (range.bFound) {
+        VimApplyTextObject(hwndEdit, chOp, range);
+    }
+    ClearPendingOperator();
+    return TRUE;
+}
 
 /* Select inner word (iw) */
 TextObjectRange VimSelectInnerWord(HWND hwndEdit) {
@@ -996,15 +1096,13 @@ void VimPageUp(HWND hwndEdit, int count) {
 }
 
 void VimHalfPageDown(HWND hwndEdit, int count) {
-    RECT rc; GetClientRect(hwndEdit, &rc);
-    int visibleLines = (rc.bottom - rc.top) / 16 / 2;
+    int visibleLines = GetVisibleLineCount(hwndEdit) / 2;
     if (visibleLines < 1) visibleLines = 10;
     VimMoveDown(hwndEdit, visibleLines * count);
 }
 
 void VimHalfPageUp(HWND hwndEdit, int count) {
-    RECT rc; GetClientRect(hwndEdit, &rc);
-    int visibleLines = (rc.bottom - rc.top) / 16 / 2;
+    int visibleLines = GetVisibleLineCount(hwndEdit) / 2;
     if (visibleLines < 1) visibleLines = 10;
     VimMoveUp(hwndEdit, visibleLines * count);
 }
@@ -2269,73 +2367,12 @@ BOOL ProcessVimKey(HWND hwndEdit, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         
         /* Normal mode - handle digit for repeat count */
-        if (ch >= TEXT('1') && ch <= TEXT('9')) {
-            g_VimState.nRepeatCount = g_VimState.nRepeatCount * 10 + (ch - TEXT('0'));
-            return TRUE;
-        }
-        if (ch == TEXT('0') && g_VimState.nRepeatCount > 0) {
-            g_VimState.nRepeatCount = g_VimState.nRepeatCount * 10;
-            return TRUE;
-        }
+        if (HandleRepeatCount(ch)) return TRUE;
         
         /* Handle pending operator */
         if (g_VimState.chPendingOp) {
-            /* Handle text objects: i{obj} or a{obj} */
-            if (g_VimState.chPendingOp == TEXT('d') || g_VimState.chPendingOp == TEXT('y') || 
-                g_VimState.chPendingOp == TEXT('c')) {
-                if (ch == TEXT('i') || ch == TEXT('a')) {
-                    /* Store the inner/around modifier and wait for object type */
-                    g_VimState.szLastCommand[0] = g_VimState.chPendingOp;
-                    g_VimState.szLastCommand[1] = ch;
-                    g_VimState.szLastCommand[2] = TEXT('\0');
-                    g_VimState.chPendingOp = (ch == TEXT('i')) ? TEXT('I') : TEXT('A'); /* Use I/A as markers */
-                    return TRUE;
-                }
-            }
-            
-            /* Handle text object type after i or a */
-            if (g_VimState.chPendingOp == TEXT('I') || g_VimState.chPendingOp == TEXT('A')) {
-                TCHAR chOp = g_VimState.szLastCommand[0];
-                BOOL bInner = (g_VimState.chPendingOp == TEXT('I'));
-                TextObjectRange range = {0, 0, FALSE};
-                
-                switch (ch) {
-                    case TEXT('w'):
-                        range = bInner ? VimSelectInnerWord(hwndEdit) : VimSelectAWord(hwndEdit);
-                        break;
-                    case TEXT('"'):
-                        range = bInner ? VimSelectInnerQuote(hwndEdit, TEXT('"')) : VimSelectAQuote(hwndEdit, TEXT('"'));
-                        break;
-                    case TEXT('\''):
-                        range = bInner ? VimSelectInnerQuote(hwndEdit, TEXT('\'')) : VimSelectAQuote(hwndEdit, TEXT('\''));
-                        break;
-                    case TEXT('('):
-                    case TEXT(')'):
-                    case TEXT('b'):
-                        range = bInner ? VimSelectInnerBracket(hwndEdit, TEXT('('), TEXT(')')) : VimSelectABracket(hwndEdit, TEXT('('), TEXT(')'));
-                        break;
-                    case TEXT('{'):
-                    case TEXT('}'):
-                    case TEXT('B'):
-                        range = bInner ? VimSelectInnerBracket(hwndEdit, TEXT('{'), TEXT('}')) : VimSelectABracket(hwndEdit, TEXT('{'), TEXT('}'));
-                        break;
-                    case TEXT('['):
-                    case TEXT(']'):
-                        range = bInner ? VimSelectInnerBracket(hwndEdit, TEXT('['), TEXT(']')) : VimSelectABracket(hwndEdit, TEXT('['), TEXT(']'));
-                        break;
-                    case TEXT('<'):
-                    case TEXT('>'):
-                        range = bInner ? VimSelectInnerBracket(hwndEdit, TEXT('<'), TEXT('>')) : VimSelectABracket(hwndEdit, TEXT('<'), TEXT('>'));
-                        break;
-                }
-                
-                if (range.bFound) {
-                    VimApplyTextObject(hwndEdit, chOp, range);
-                }
-                g_VimState.chPendingOp = 0;
-                g_VimState.nRepeatCount = 0;
-                return TRUE;
-            }
+            if (StartTextObjectPending(ch)) return TRUE;
+            if (ApplyTextObjectIfPending(hwndEdit, ch)) return TRUE;
             
             switch (g_VimState.chPendingOp) {
                 case TEXT('d'):
@@ -2430,8 +2467,7 @@ BOOL ProcessVimKey(HWND hwndEdit, UINT msg, WPARAM wParam, LPARAM lParam) {
                         /* zz - center current line on screen */
                         DWORD pos = GetEditCursorPos(hwndEdit);
                         int line = GetLineFromChar(hwndEdit, pos);
-                        RECT rc; GetClientRect(hwndEdit, &rc);
-                        int visibleLines = (rc.bottom - rc.top) / 16;
+                        int visibleLines = GetVisibleLineCount(hwndEdit);
                         int targetFirst = line - visibleLines / 2;
                         if (targetFirst < 0) targetFirst = 0;
                         int currentFirst = (int)SendMessage(hwndEdit, EM_GETFIRSTVISIBLELINE, 0, 0);
@@ -2448,8 +2484,7 @@ BOOL ProcessVimKey(HWND hwndEdit, UINT msg, WPARAM wParam, LPARAM lParam) {
                         /* zb - scroll current line to bottom */
                         DWORD pos = GetEditCursorPos(hwndEdit);
                         int line = GetLineFromChar(hwndEdit, pos);
-                        RECT rc; GetClientRect(hwndEdit, &rc);
-                        int visibleLines = (rc.bottom - rc.top) / 16;
+                        int visibleLines = GetVisibleLineCount(hwndEdit);
                         int targetFirst = line - visibleLines + 1;
                         if (targetFirst < 0) targetFirst = 0;
                         int currentFirst = (int)SendMessage(hwndEdit, EM_GETFIRSTVISIBLELINE, 0, 0);
@@ -2463,8 +2498,7 @@ BOOL ProcessVimKey(HWND hwndEdit, UINT msg, WPARAM wParam, LPARAM lParam) {
                     if (ch == TEXT('<')) VimUnindentLine(hwndEdit, count);
                     break;
             }
-            g_VimState.chPendingOp = 0;
-            g_VimState.nRepeatCount = 0;
+            ClearPendingOperator();
             return TRUE;
         }
         
