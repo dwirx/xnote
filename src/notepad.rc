@@ -85,6 +85,8 @@ IDI_APPICON ICON "icons/xnote.ico"
 #define IDM_THEME_GRUVBOX       279
 #define IDM_THEME_EVERFOREST_DARK  280
 #define IDM_THEME_EVERFOREST_LIGHT 281
+#define IDM_THEME_OBSIDIAN_PRO  320
+#define IDM_THEME_FROSTED_GLASS 321
 #define IDM_HELP_ABOUT      301
 #define IDR_MAINMENU        1000
 #define IDR_ACCEL           1001
@@ -176,6 +178,8 @@ BEGIN
             MENUITEM SEPARATOR
             MENUITEM "&Everforest Dark",    IDM_THEME_EVERFOREST_DARK
             MENUITEM "Everforest &Light",   IDM_THEME_EVERFOREST_LIGHT
+            MENUITEM "&Obsidian Pro",       IDM_THEME_OBSIDIAN_PRO
+            MENUITEM "&Frosted Glass",      IDM_THEME_FROSTED_GLASS
         END
         MENUITEM SEPARATOR
         MENUITEM "Zoom &In\tCtrl++",        IDM_VIEW_ZOOMIN

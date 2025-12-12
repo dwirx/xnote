@@ -313,6 +313,7 @@ static void SetRangeColorDirect(HWND hwndEdit, int nStart, int nEnd, COLORREF co
     ZeroMemory(&cf, sizeof(cf));
     cf.cbSize = sizeof(cf);
     cf.dwMask = CFM_COLOR;
+    cf.dwEffects = 0;  /* Clear CFE_AUTOCOLOR to force manual color */
     cf.crTextColor = color;
     
     /* Select range and apply color - no need to save/restore for batch operations */

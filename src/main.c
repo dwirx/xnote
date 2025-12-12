@@ -43,6 +43,50 @@ static HFONT g_hFont = NULL;
 /* Font handle for tab control - smaller font for better fit */
 static HFONT g_hTabFont = NULL;
 
+/* Recreate tab font based on current editor font settings */
+void RefreshTabFont(void) {
+    if (g_hTabFont) {
+        DeleteObject(g_hTabFont);
+        g_hTabFont = NULL;
+    }
+    
+    LOGFONT lf = {0};
+    /* Derive from current editor font; default fallback if unavailable */
+    HFONT hBase = g_hFont ? g_hFont : GetGlobalFont();
+    if (hBase) {
+        if (GetObject(hBase, sizeof(LOGFONT), &lf) == 0) {
+            ZeroMemory(&lf, sizeof(LOGFONT));
+        }
+    }
+    
+    /* If we didn't get metrics, use a sensible fixed-face default */
+    HDC hdcScreen = GetDC(NULL);
+    int nDpi = hdcScreen ? GetDeviceCaps(hdcScreen, LOGPIXELSY) : 96;
+    
+    if (lf.lfHeight == 0) {
+        _tcscpy(lf.lfFaceName, TEXT("Cascadia Code"));
+        lf.lfHeight = -MulDiv(11, nDpi, 72);
+        lf.lfWeight = FW_NORMAL;
+        lf.lfPitchAndFamily = FIXED_PITCH | FF_MODERN;
+    }
+    
+    /* Slightly smaller size for tabs */
+    int ptSize = (int)(-lf.lfHeight * 72 / (float)nDpi + 0.5f);
+    int tabPt = (ptSize > 1) ? ptSize - 1 : ptSize;
+    lf.lfHeight = -MulDiv(tabPt, nDpi, 72);
+    lf.lfWeight = FW_NORMAL; /* keep tabs regular weight for clarity */
+    lf.lfItalic = FALSE;
+    
+    g_hTabFont = CreateFontIndirect(&lf);
+    
+    if (hdcScreen) ReleaseDC(NULL, hdcScreen);
+    
+    if (g_AppState.hwndTab && g_hTabFont) {
+        SendMessage(g_AppState.hwndTab, WM_SETFONT, (WPARAM)g_hTabFont, TRUE);
+        InvalidateRect(g_AppState.hwndTab, NULL, TRUE);
+    }
+}
+
 /* Set global font handle */
 void SetGlobalFont(HFONT hFont) {
     if (g_hFont && g_hFont != hFont) {
@@ -530,6 +574,116 @@ static LRESULT CALLBACK TabSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             }
             break;
         }
+        
+        case WM_ERASEBKGND: {
+            /* We handle background in WM_PAINT */
+            return 1;
+        }
+        
+        case WM_PAINT: {
+            /* Fully custom paint to ensure correct theme colors */
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+            const ThemeColors* pTheme = GetThemeColors();
+            
+            /* Get client rect and fill background */
+            RECT rcClient;
+            GetClientRect(hwnd, &rcClient);
+            HBRUSH hBgBrush = CreateSolidBrush(pTheme->crTabBg);
+            FillRect(hdc, &rcClient, hBgBrush);
+            DeleteObject(hBgBrush);
+            
+            /* Get tab font */
+            HFONT hFont = g_hTabFont ? g_hTabFont : g_hFont;
+            HFONT hOldFont = NULL;
+            if (hFont) {
+                hOldFont = (HFONT)SelectObject(hdc, hFont);
+            }
+            
+            /* Draw each tab */
+            int nTabCount = TabCtrl_GetItemCount(hwnd);
+            for (int i = 0; i < nTabCount; i++) {
+                RECT rcTab;
+                TabCtrl_GetItemRect(hwnd, i, &rcTab);
+                
+                BOOL bSelected = (i == g_AppState.nCurrentTab);
+                
+                /* Fill tab background */
+                HBRUSH hTabBrush = CreateSolidBrush(bSelected ? pTheme->crTabActive : pTheme->crTabInactive);
+                FillRect(hdc, &rcTab, hTabBrush);
+                DeleteObject(hTabBrush);
+                
+                /* Draw group color indicator if present */
+                if (i < g_AppState.nTabCount && g_AppState.tabs[i].nGroupId != 0) {
+                    RECT rcGroup = rcTab;
+                    rcGroup.right = rcGroup.left + 4;
+                    HBRUSH hGroupBrush = CreateSolidBrush(g_AppState.tabs[i].crGroupColor);
+                    FillRect(hdc, &rcGroup, hGroupBrush);
+                    DeleteObject(hGroupBrush);
+                }
+                
+                /* Draw active tab indicator */
+                if (bSelected) {
+                    RECT rcIndicator = rcTab;
+                    rcIndicator.bottom = rcIndicator.top + 3;
+                    HBRUSH hIndicatorBrush = CreateSolidBrush(pTheme->crKeyword);
+                    FillRect(hdc, &rcIndicator, hIndicatorBrush);
+                    DeleteObject(hIndicatorBrush);
+                }
+                
+                /* Get tab text */
+                TCHAR szText[MAX_PATH] = {0};
+                TCITEM tci = {0};
+                tci.mask = TCIF_TEXT;
+                tci.pszText = szText;
+                tci.cchTextMax = MAX_PATH;
+                TabCtrl_GetItem(hwnd, i, &tci);
+                
+                /* Draw text */
+                RECT rcText = rcTab;
+                rcText.left += TAB_PADDING;
+                rcText.right -= (CLOSE_BTN_SIZE + TAB_PADDING + 4);
+                rcText.top += 1;
+                
+                SetBkMode(hdc, TRANSPARENT);
+                SetTextColor(hdc, pTheme->crTabText);
+                DrawText(hdc, szText, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+                
+                /* Draw close button */
+                RECT rcClose;
+                rcClose.right = rcTab.right - 4;
+                rcClose.left = rcClose.right - CLOSE_BTN_SIZE;
+                rcClose.top = rcTab.top + (rcTab.bottom - rcTab.top - CLOSE_BTN_SIZE) / 2;
+                rcClose.bottom = rcClose.top + CLOSE_BTN_SIZE;
+                
+                BOOL bHoverClose = (g_nHoverTab == i && g_bHoverClose);
+                if (bHoverClose) {
+                    HBRUSH hCloseBrush = CreateSolidBrush(RGB(232, 17, 35));
+                    RECT rcCloseBg = rcClose;
+                    InflateRect(&rcCloseBg, 2, 2);
+                    FillRect(hdc, &rcCloseBg, hCloseBrush);
+                    DeleteObject(hCloseBrush);
+                }
+                
+                /* Draw X */
+                COLORREF closeColor = bHoverClose ? RGB(255, 255, 255) : pTheme->crTabText;
+                HPEN hPen = CreatePen(PS_SOLID, 2, closeColor);
+                HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+                MoveToEx(hdc, rcClose.left + 3, rcClose.top + 3, NULL);
+                LineTo(hdc, rcClose.right - 3, rcClose.bottom - 3);
+                MoveToEx(hdc, rcClose.right - 3, rcClose.top + 3, NULL);
+                LineTo(hdc, rcClose.left + 3, rcClose.bottom - 3);
+                SelectObject(hdc, hOldPen);
+                DeleteObject(hPen);
+            }
+            
+            if (hOldFont) {
+                SelectObject(hdc, hOldFont);
+            }
+            
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
     }
     return CallWindowProc(g_OrigTabProc, hwnd, msg, wParam, lParam);
 }
@@ -697,6 +851,13 @@ int AddNewTab(HWND hwnd, const TCHAR* szTitle) {
         ShowErrorDialog(hwnd, TEXT("Failed to create edit control for new tab."));
         return -1;
     }
+    
+    /* Apply current theme and font to the new edit control for immediate correct colors */
+    ApplyThemeToEdit(g_AppState.tabs[nNewTab].hwndEdit);
+    if (g_hFont) {
+        SendMessage(g_AppState.tabs[nNewTab].hwndEdit, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+    }
+    g_AppState.tabs[nNewTab].bNeedsSyntaxRefresh = TRUE; /* ensure highlight matches theme on first show */
     
     /* Create line number window if line numbers are enabled AND not in zen/distraction-free mode */
     BOOL bHideLineNumbers = IsZenModeEnabled() || IsDistractionFreeModeEnabled();
@@ -1032,14 +1193,24 @@ void SwitchToTab(HWND hwnd, int nTabIndex) {
     if (pTab->hwndEdit) {
         ShowWindow(pTab->hwndEdit, SW_SHOW);
         
-        /* Apply lazy syntax refresh if needed (after theme change) */
-        if (pTab->bNeedsSyntaxRefresh && g_bSyntaxHighlight && pTab->language != LANG_NONE) {
-            ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
-            pTab->bNeedsSyntaxRefresh = FALSE;
+        /* Apply font first */
+        if (g_hFont) {
+            SendMessage(pTab->hwndEdit, WM_SETFONT, (WPARAM)g_hFont, TRUE);
         }
         
         /* Apply per-tab zoom level */
         ApplyTabZoom(hwnd, nTabIndex);
+        
+        /* ALWAYS apply theme colors to ensure correct foreground color */
+        /* This is essential because RichEdit may lose color formatting */
+        ApplyThemeToEdit(pTab->hwndEdit);
+        
+        /* ALWAYS apply syntax highlighting for code files */
+        /* This ensures colors are correct even after multiple tab switches */
+        if (g_bSyntaxHighlight && pTab->language != LANG_NONE) {
+            ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
+        }
+        pTab->bNeedsSyntaxRefresh = FALSE;
     }
     
     /* Re-enable redraw */
@@ -1050,6 +1221,11 @@ void SwitchToTab(HWND hwnd, int nTabIndex) {
     
     /* Update tab control selection */
     TabCtrl_SetCurSel(g_AppState.hwndTab, nTabIndex);
+    
+    /* Force complete redraw of all tabs to ensure correct colors */
+    /* First erase background, then redraw each tab item */
+    RedrawWindow(g_AppState.hwndTab, NULL, NULL, 
+                 RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     
     /* Update window title */
     UpdateWindowTitle(hwnd);
@@ -1152,13 +1328,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             /* Create font for edit controls - will be updated after session load */
             g_hFont = GetCurrentFontHandle();
             
-            /* Create smaller font for tab control - use system UI font */
-            {
-                NONCLIENTMETRICS ncm;
-                ncm.cbSize = sizeof(ncm);
-                SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-                g_hTabFont = CreateFontIndirect(&ncm.lfMenuFont);
-            }
+            /* Create tab font derived from editor font */
+            RefreshTabFont();
             
             /* Create status bar */
             g_AppState.hwndStatus = CreateStatusBar(hwnd, g_AppState.hInstance);
@@ -1169,7 +1340,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 0,
                 WC_TABCONTROL,
                 TEXT(""),
-                WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | TCS_TABS | TCS_OWNERDRAWFIXED | TCS_FIXEDWIDTH,
+                WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | TCS_TABS | TCS_FIXEDWIDTH,
                 0, 0, 0, TAB_HEIGHT,
                 hwnd,
                 (HMENU)IDC_TAB,
@@ -1177,7 +1348,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 NULL
             );
             /* Use smaller tab font for better text fit */
-            SendMessage(g_AppState.hwndTab, WM_SETFONT, (WPARAM)g_hTabFont, TRUE);
+            if (g_hTabFont) {
+                SendMessage(g_AppState.hwndTab, WM_SETFONT, (WPARAM)g_hTabFont, TRUE);
+            }
             
             /* Subclass tab control to handle mouse events for close button */
             g_OrigTabProc = (WNDPROC)SetWindowLongPtr(g_AppState.hwndTab, GWLP_WNDPROC, (LONG_PTR)TabSubclassProc);
@@ -1192,9 +1365,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             InitTheme();
             
             /* Try to load previous session, otherwise create first tab */
-            if (!LoadSession(hwnd)) {
+            BOOL bLoadedSession = LoadSession(hwnd);
+            if (!bLoadedSession) {
                 AddNewTab(hwnd, TEXT("Untitled"));
             }
+            
+            /* Reapply font settings (also refresh tab font) from current settings */
+            ApplyFont(hwnd, g_FontSettings.szFontName, g_FontSettings.nFontSize,
+                      g_FontSettings.bBold, g_FontSettings.bItalic);
             
             /* Apply theme to all controls */
             ApplyThemeToWindow(hwnd);
@@ -1357,102 +1535,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
         
-        case WM_DRAWITEM: {
-            DRAWITEMSTRUCT* pDIS = (DRAWITEMSTRUCT*)lParam;
-            if (pDIS->CtlID == IDC_TAB) {
-                /* Draw tab with close button using theme colors */
-                RECT rc = pDIS->rcItem;
-                BOOL bSelected = (pDIS->itemState & ODS_SELECTED);
-                const ThemeColors* pTheme = GetThemeColors();
-                
-                /* Fill background with theme color */
-                HBRUSH hBgBrush = CreateSolidBrush(bSelected ? pTheme->crTabActive : pTheme->crTabInactive);
-                FillRect(pDIS->hDC, &rc, hBgBrush);
-                DeleteObject(hBgBrush);
-                
-                /* Get tab text */
-                TCHAR szText[MAX_PATH];
-                TCITEM tci = {0};
-                tci.mask = TCIF_TEXT;
-                tci.pszText = szText;
-                tci.cchTextMax = MAX_PATH;
-                TabCtrl_GetItem(g_AppState.hwndTab, pDIS->itemID, &tci);
-                
-                /* Draw tab group color indicator (left border) */
-                if (pDIS->itemID < (UINT)g_AppState.nTabCount) {
-                    TabState* pTabDraw = &g_AppState.tabs[pDIS->itemID];
-                    if (pTabDraw->nGroupId != 0) {
-                        RECT rcGroup = rc;
-                        rcGroup.right = rcGroup.left + 4;
-                        HBRUSH hGroupBrush = CreateSolidBrush(pTabDraw->crGroupColor);
-                        FillRect(pDIS->hDC, &rcGroup, hGroupBrush);
-                        DeleteObject(hGroupBrush);
-                    }
-                }
-                
-                /* Draw active tab indicator line (top border) */
-                if (bSelected) {
-                    RECT rcIndicator = rc;
-                    rcIndicator.bottom = rcIndicator.top + 3;
-                    HBRUSH hIndicatorBrush = CreateSolidBrush(pTheme->crKeyword); /* Use accent color */
-                    FillRect(pDIS->hDC, &rcIndicator, hIndicatorBrush);
-                    DeleteObject(hIndicatorBrush);
-                }
-
-                /* Select tab font for drawing (smaller than edit font) */
-                HFONT hOldFont = (HFONT)SelectObject(pDIS->hDC, g_hTabFont ? g_hTabFont : g_hFont);
-
-                /* Calculate text area - better padding for improved spacing */
-                RECT rcText = rc;
-                rcText.left += TAB_PADDING;
-                rcText.right -= (CLOSE_BTN_SIZE + TAB_PADDING + 4);
-                rcText.top += 1; /* Slight vertical adjustment for better centering */
-
-                /* Draw text with theme color - make active tab text brighter */
-                SetBkMode(pDIS->hDC, TRANSPARENT);
-                COLORREF textColor = bSelected ? pTheme->crForeground : pTheme->crTabText;
-                SetTextColor(pDIS->hDC, textColor);
-                DrawText(pDIS->hDC, szText, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
-                
-                /* Restore font */
-                SelectObject(pDIS->hDC, hOldFont);
-                
-                /* Draw close button (X) */
-                RECT rcClose;
-                rcClose.right = pDIS->rcItem.right - 4;
-                rcClose.left = rcClose.right - CLOSE_BTN_SIZE;
-                rcClose.top = pDIS->rcItem.top + (pDIS->rcItem.bottom - pDIS->rcItem.top - CLOSE_BTN_SIZE) / 2;
-                rcClose.bottom = rcClose.top + CLOSE_BTN_SIZE;
-                
-                /* Check if hovering over this tab's close button */
-                BOOL bHoverThisClose = (g_nHoverTab == (int)pDIS->itemID && g_bHoverClose);
-                
-                /* Draw close button background if hovering */
-                if (bHoverThisClose) {
-                    HBRUSH hCloseBrush = CreateSolidBrush(RGB(232, 17, 35));
-                    RECT rcCloseBg = rcClose;
-                    InflateRect(&rcCloseBg, 2, 2);
-                    FillRect(pDIS->hDC, &rcCloseBg, hCloseBrush);
-                    DeleteObject(hCloseBrush);
-                }
-                
-                /* Draw X with appropriate color */
-                COLORREF closeColor = bHoverThisClose ? RGB(255, 255, 255) : RGB(100, 100, 100);
-                HPEN hPen = CreatePen(PS_SOLID, 2, closeColor);
-                HPEN hOldPen = (HPEN)SelectObject(pDIS->hDC, hPen);
-                MoveToEx(pDIS->hDC, rcClose.left + 3, rcClose.top + 3, NULL);
-                LineTo(pDIS->hDC, rcClose.right - 3, rcClose.bottom - 3);
-                MoveToEx(pDIS->hDC, rcClose.right - 3, rcClose.top + 3, NULL);
-                LineTo(pDIS->hDC, rcClose.left + 3, rcClose.bottom - 3);
-                SelectObject(pDIS->hDC, hOldPen);
-                DeleteObject(hPen);
-                
-                return TRUE;
-            }
-            break;
-        }
-        
-        /* Note: WM_LBUTTONUP for tab close is handled by TabSubclassProc using IsPointInCloseButton */
+        /* Tab drawing is now handled entirely by TabSubclassProc WM_PAINT */
 
         case WM_INITMENUPOPUP: {
             HMENU hMenu = (HMENU)wParam;
@@ -1743,6 +1826,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     break;
                 case IDM_THEME_EVERFOREST_LIGHT:
                     SetTheme(THEME_EVERFOREST_LIGHT);
+                    ApplyThemeToWindow(hwnd);
+                    break;
+                case IDM_THEME_OBSIDIAN_PRO:
+                    SetTheme(THEME_OBSIDIAN_PRO);
+                    ApplyThemeToWindow(hwnd);
+                    break;
+                case IDM_THEME_FROSTED_GLASS:
+                    SetTheme(THEME_FROSTED_GLASS);
                     ApplyThemeToWindow(hwnd);
                     break;
                 

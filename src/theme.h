@@ -22,6 +22,8 @@ typedef enum {
     THEME_GRUVBOX_DARK,     /* Gruvbox Dark */
     THEME_EVERFOREST_DARK,  /* Everforest Dark */
     THEME_EVERFOREST_LIGHT, /* Everforest Light */
+    THEME_OBSIDIAN_PRO,     /* High-contrast dark */
+    THEME_FROSTED_GLASS,    /* Light, frosted-style translucent feel */
     THEME_COUNT
 } ThemeType;
 

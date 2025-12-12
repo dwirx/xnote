@@ -3,6 +3,7 @@
 #include "session.h"
 #include "json_format.h"
 #include "performance.h"
+#include "theme.h"
 #include <stdio.h>
 #include <richedit.h>
 
@@ -1379,6 +1380,10 @@ BOOL FileOpen(HWND hwnd) {
     /* Force redraw */
     InvalidateRect(hwndEdit, NULL, TRUE);
     UpdateWindow(hwndEdit);
+
+    /* Apply theme colors to ensure correct foreground color after loading text */
+    /* This is essential because SetWindowText inserts text with default (black) color */
+    ApplyThemeToEdit(hwndEdit);
 
     /* Apply syntax highlighting AFTER display update for better responsiveness */
     /* Only for small files - large files skip highlighting for performance */

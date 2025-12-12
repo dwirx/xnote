@@ -250,6 +250,7 @@ int CountWords(HWND hwndEdit);
 /* Font operations */
 void SetGlobalFont(HFONT hFont);
 HFONT GetGlobalFont(void);
+void RefreshTabFont(void);
 
 /* JSON formatter operations */
 #include "json_format.h"

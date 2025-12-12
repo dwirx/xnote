@@ -19,10 +19,10 @@ static BOOL g_bSessionDirty = FALSE;
 
 /* Global font settings with defaults */
 FontSettings g_FontSettings = {
-    TEXT("Consolas"),  /* Default font - excellent for coding */
-    11,                /* Default size */
-    FALSE,             /* Not bold */
-    FALSE              /* Not italic */
+    TEXT("Cascadia Code"),  /* Default font - clear, modern monospace */
+    12,                     /* Default size for better readability */
+    FALSE,                  /* Not bold */
+    FALSE                   /* Not italic */
 };
 
 /* Global font handle */
@@ -785,6 +785,9 @@ void ApplyFont(HWND hwnd, const TCHAR* szFontName, int nSize, BOOL bBold, BOOL b
     /* Update global font handle (this will delete old font) */
     SetGlobalFont(hNewFont);
     g_hCurrentFont = hNewFont;
+    
+    /* Recreate tab font to stay in sync with editor font */
+    RefreshTabFont();
     
     /* Apply to all edit controls */
     for (int i = 0; i < g_AppState.nTabCount; i++) {

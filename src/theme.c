@@ -10,7 +10,7 @@
 #include <richedit.h>
 
 /* Global theme state */
-ThemeType g_CurrentTheme = THEME_TOKYO_NIGHT;
+ThemeType g_CurrentTheme = THEME_FROSTED_GLASS;
 ThemeColors g_ThemeColors = {0};
 
 /* Theme definitions */
@@ -362,13 +362,71 @@ static const Theme g_Themes[] = {
             RGB(253, 246, 227),  /* Status text */
         }
     },
+
+    /* THEME_OBSIDIAN_PRO - High-contrast dark for clarity */
+    {
+        THEME_OBSIDIAN_PRO,
+        TEXT("Obsidian Pro"),
+        {
+            RGB(20, 26, 33),     /* Background - #141a21 */
+            RGB(235, 242, 247),  /* Foreground - #ebf2f7 */
+            RGB(120, 131, 145),  /* Line number - #788391 */
+            RGB(14, 20, 27),     /* Line num bg - #0e141b */
+            RGB(30, 39, 50),     /* Current line - #1e2732 */
+            RGB(47, 68, 90),     /* Selection - #2f445a */
+            RGB(160, 225, 255),  /* Cursor - #a0e1ff */
+            RGB(132, 147, 162),  /* Comment - #8493a2 */
+            RGB(142, 209, 255),  /* Keyword - #8ed1ff */
+            RGB(194, 255, 179),  /* String - #c2ffb3 */
+            RGB(255, 213, 142),  /* Number - #ffd58e */
+            RGB(147, 240, 218),  /* Function - #93f0da */
+            RGB(189, 202, 255),  /* Type - #bdcaff */
+            RGB(240, 244, 248),  /* Operator - #f0f4f8 */
+            RGB(255, 140, 140),  /* Preprocessor - #ff8c8c */
+            RGB(14, 20, 27),     /* Tab bg */
+            RGB(25, 33, 43),     /* Tab active - brighter for clarity */
+            RGB(34, 44, 56),     /* Tab inactive */
+            RGB(235, 242, 247),  /* Tab text */
+            RGB(42, 52, 64),     /* Status bg - #2a3440 */
+            RGB(235, 242, 247),  /* Status text */
+        }
+    },
+
+    /* THEME_FROSTED_GLASS - Light, airy, "translucent" feel without true alpha */
+    {
+        THEME_FROSTED_GLASS,
+        TEXT("Frosted Glass"),
+        {
+            RGB(242, 246, 250),  /* Background - #f2f6fa (soft ice) */
+            RGB(47, 60, 73),     /* Foreground - #2f3c49 */
+            RGB(119, 136, 153),  /* Line number - #778899 */
+            RGB(233, 238, 243),  /* Line num bg - #e9eef3 */
+            RGB(224, 232, 239),  /* Current line - #e0e8ef */
+            RGB(196, 215, 232),  /* Selection - #c4d7e8 */
+            RGB(30, 64, 175),    /* Cursor - #1e40af */
+            RGB(109, 125, 141),  /* Comment - #6d7d8d */
+            RGB(52, 120, 170),   /* Keyword - #3478aa */
+            RGB(70, 130, 70),    /* String - #468246 */
+            RGB(180, 120, 60),   /* Number - #b4783c */
+            RGB(60, 145, 180),   /* Function - #3c91b4 */
+            RGB(52, 95, 160),    /* Type - #345fa0 */
+            RGB(47, 60, 73),     /* Operator - matches foreground */
+            RGB(190, 80, 90),    /* Preprocessor - muted red */
+            RGB(233, 238, 243),  /* Tab bg */
+            RGB(242, 246, 250),  /* Tab active */
+            RGB(224, 232, 239),  /* Tab inactive */
+            RGB(47, 60, 73),     /* Tab text */
+            RGB(210, 222, 233),  /* Status bg */
+            RGB(47, 60, 73),     /* Status text */
+        }
+    },
 };
 
 
 /* Initialize theme system */
 void InitTheme(void) {
-    /* Set default theme to Tokyo Night */
-    SetTheme(THEME_TOKYO_NIGHT);
+    /* Set default theme to Frosted Glass for balanced contrast */
+    SetTheme(THEME_FROSTED_GLASS);
 }
 
 /* Set current theme */
@@ -411,18 +469,48 @@ int GetThemeCount(void) {
 void ApplyThemeToEdit(HWND hwndEdit) {
     if (!hwndEdit) return;
     
+    /* Disable redraw during color changes for smoother update */
+    SendMessage(hwndEdit, WM_SETREDRAW, FALSE, 0);
+    
+    /* Disable event notifications temporarily */
+    DWORD dwOldMask = (DWORD)SendMessage(hwndEdit, EM_SETEVENTMASK, 0, 0);
+    
+    /* Save current selection */
+    DWORD dwSelStart, dwSelEnd;
+    SendMessage(hwndEdit, EM_GETSEL, (WPARAM)&dwSelStart, (LPARAM)&dwSelEnd);
+    
     /* Set background color */
     SendMessage(hwndEdit, EM_SETBKGNDCOLOR, 0, g_ThemeColors.crBackground);
     
     /* Set default text color using CHARFORMAT2 */
+    /* First, select all text to ensure color is applied to existing content */
+    int nLen = GetWindowTextLength(hwndEdit);
+    
     CHARFORMAT2 cf;
     ZeroMemory(&cf, sizeof(cf));
     cf.cbSize = sizeof(cf);
+    /* Use CFM_COLOR and clear CFE_AUTOCOLOR to force manual color */
     cf.dwMask = CFM_COLOR;
+    cf.dwEffects = 0;  /* Clear CFE_AUTOCOLOR flag */
     cf.crTextColor = g_ThemeColors.crForeground;
+    
+    /* Apply to all existing text by selecting all first */
+    if (nLen > 0) {
+        SendMessage(hwndEdit, EM_SETSEL, 0, nLen);
+        SendMessage(hwndEdit, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
+    }
+    
+    /* Also set as default for new text */
     SendMessage(hwndEdit, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
     
-    /* Refresh the control */
+    /* Restore selection */
+    SendMessage(hwndEdit, EM_SETSEL, dwSelStart, dwSelEnd);
+    
+    /* Restore event mask */
+    SendMessage(hwndEdit, EM_SETEVENTMASK, 0, dwOldMask);
+    
+    /* Re-enable redraw and refresh */
+    SendMessage(hwndEdit, WM_SETREDRAW, TRUE, 0);
     InvalidateRect(hwndEdit, NULL, TRUE);
 }
 
