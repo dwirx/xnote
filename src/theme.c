@@ -8,6 +8,7 @@
 #include "session.h"
 #include "syntax.h"
 #include <richedit.h>
+#include <math.h>
 
 /* Global theme state */
 ThemeType g_CurrentTheme = THEME_FROSTED_GLASS;
@@ -465,53 +466,58 @@ int GetThemeCount(void) {
     return THEME_COUNT;
 }
 
-/* Apply theme to RichEdit control */
+/* Apply theme to RichEdit control - FLICKER-FREE version */
 void ApplyThemeToEdit(HWND hwndEdit) {
     if (!hwndEdit) return;
     
-    /* Disable redraw during color changes for smoother update */
+    /* STEP 1: Disable redraw FIRST - critical for no flicker */
     SendMessage(hwndEdit, WM_SETREDRAW, FALSE, 0);
     
     /* Disable event notifications temporarily */
     DWORD dwOldMask = (DWORD)SendMessage(hwndEdit, EM_SETEVENTMASK, 0, 0);
     
-    /* Save current selection */
+    /* Save current state */
     DWORD dwSelStart, dwSelEnd;
     SendMessage(hwndEdit, EM_GETSEL, (WPARAM)&dwSelStart, (LPARAM)&dwSelEnd);
     
-    /* Set background color */
+    /* Save scroll position */
+    POINT ptScroll = {0};
+    SendMessage(hwndEdit, EM_GETSCROLLPOS, 0, (LPARAM)&ptScroll);
+    
+    /* STEP 2: Set background color FIRST (prevents white flash) */
     SendMessage(hwndEdit, EM_SETBKGNDCOLOR, 0, g_ThemeColors.crBackground);
     
-    /* Set default text color using CHARFORMAT2 */
-    /* First, select all text to ensure color is applied to existing content */
+    /* STEP 3: Apply text color to all content */
     int nLen = GetWindowTextLength(hwndEdit);
     
     CHARFORMAT2 cf;
     ZeroMemory(&cf, sizeof(cf));
     cf.cbSize = sizeof(cf);
-    /* Use CFM_COLOR and clear CFE_AUTOCOLOR to force manual color */
     cf.dwMask = CFM_COLOR;
     cf.dwEffects = 0;  /* Clear CFE_AUTOCOLOR flag */
     cf.crTextColor = g_ThemeColors.crForeground;
     
-    /* Apply to all existing text by selecting all first */
+    /* Apply to all existing text */
     if (nLen > 0) {
         SendMessage(hwndEdit, EM_SETSEL, 0, nLen);
         SendMessage(hwndEdit, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
     }
     
-    /* Also set as default for new text */
+    /* Set as default for new text */
     SendMessage(hwndEdit, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
     
-    /* Restore selection */
+    /* STEP 4: Restore state */
     SendMessage(hwndEdit, EM_SETSEL, dwSelStart, dwSelEnd);
+    SendMessage(hwndEdit, EM_SETSCROLLPOS, 0, (LPARAM)&ptScroll);
     
     /* Restore event mask */
     SendMessage(hwndEdit, EM_SETEVENTMASK, 0, dwOldMask);
     
-    /* Re-enable redraw and refresh */
+    /* STEP 5: Enable redraw LAST - single repaint */
     SendMessage(hwndEdit, WM_SETREDRAW, TRUE, 0);
-    InvalidateRect(hwndEdit, NULL, TRUE);
+    
+    /* Force single complete repaint */
+    RedrawWindow(hwndEdit, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ERASE | RDW_FRAME);
 }
 
 /* Apply theme to main window and all controls - optimized for performance */
@@ -560,4 +566,127 @@ void ApplyThemeToWindow(HWND hwnd) {
     
     /* Refresh main window */
     RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+}
+
+/* ============================================================================
+ * CONTRAST AND LUMINANCE FUNCTIONS
+ * WCAG 2.0 compliant contrast ratio calculation
+ * ============================================================================ */
+
+/* Get relative luminance of a color (WCAG 2.0 formula) */
+float GetRelativeLuminance(COLORREF cr) {
+    /* Extract RGB components and normalize to 0-1 */
+    float r = (float)GetRValue(cr) / 255.0f;
+    float g = (float)GetGValue(cr) / 255.0f;
+    float b = (float)GetBValue(cr) / 255.0f;
+    
+    /* Apply sRGB gamma correction */
+    r = (r <= 0.03928f) ? (r / 12.92f) : (float)pow((r + 0.055f) / 1.055f, 2.4f);
+    g = (g <= 0.03928f) ? (g / 12.92f) : (float)pow((g + 0.055f) / 1.055f, 2.4f);
+    b = (b <= 0.03928f) ? (b / 12.92f) : (float)pow((b + 0.055f) / 1.055f, 2.4f);
+    
+    /* Calculate relative luminance */
+    return 0.2126f * r + 0.7152f * g + 0.0722f * b;
+}
+
+/* Calculate contrast ratio between two colors (WCAG 2.0) */
+float CalculateContrastRatio(COLORREF crFg, COLORREF crBg) {
+    float lumFg = GetRelativeLuminance(crFg);
+    float lumBg = GetRelativeLuminance(crBg);
+    
+    /* Ensure lighter color is in numerator */
+    float lighter = (lumFg > lumBg) ? lumFg : lumBg;
+    float darker = (lumFg > lumBg) ? lumBg : lumFg;
+    
+    /* Contrast ratio formula: (L1 + 0.05) / (L2 + 0.05) */
+    return (lighter + 0.05f) / (darker + 0.05f);
+}
+
+/* Check if a theme is a light theme */
+BOOL IsLightTheme(ThemeType theme) {
+    switch (theme) {
+        case THEME_LIGHT:
+        case THEME_TOKYO_NIGHT_LIGHT:
+        case THEME_EVERFOREST_LIGHT:
+        case THEME_FROSTED_GLASS:
+            return TRUE;
+        default:
+            return FALSE;
+    }
+}
+
+/* Apply theme to RichEdit control without flicker - enhanced version */
+void ApplyThemeToEditNoFlicker(HWND hwndEdit) {
+    if (!hwndEdit) return;
+    
+    /* Check if there's any content - use simpler approach for empty controls */
+    int nLen = GetWindowTextLength(hwndEdit);
+    
+    if (nLen == 0) {
+        /* For empty controls, just set background and default text color */
+        SendMessage(hwndEdit, EM_SETBKGNDCOLOR, 0, g_ThemeColors.crBackground);
+        
+        CHARFORMAT2 cf;
+        ZeroMemory(&cf, sizeof(cf));
+        cf.cbSize = sizeof(cf);
+        cf.dwMask = CFM_COLOR;
+        cf.dwEffects = 0;
+        cf.crTextColor = g_ThemeColors.crForeground;
+        SendMessage(hwndEdit, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
+        return;
+    }
+    
+    /* For controls with content, use full procedure */
+    
+    /* Disable redraw FIRST - critical for no flicker */
+    SendMessage(hwndEdit, WM_SETREDRAW, FALSE, 0);
+    
+    /* Disable event notifications */
+    DWORD dwOldMask = (DWORD)SendMessage(hwndEdit, EM_SETEVENTMASK, 0, 0);
+    
+    /* Save current state */
+    DWORD dwSelStart, dwSelEnd;
+    SendMessage(hwndEdit, EM_GETSEL, (WPARAM)&dwSelStart, (LPARAM)&dwSelEnd);
+    
+    /* Get scroll position */
+    POINT ptScroll = {0};
+    SendMessage(hwndEdit, EM_GETSCROLLPOS, 0, (LPARAM)&ptScroll);
+    
+    /* BATCH ALL COLOR OPERATIONS */
+    
+    /* 1. Set background color first (prevents white flash) */
+    SendMessage(hwndEdit, EM_SETBKGNDCOLOR, 0, g_ThemeColors.crBackground);
+    
+    /* 2. Set text color for all content */
+    CHARFORMAT2 cf;
+    ZeroMemory(&cf, sizeof(cf));
+    cf.cbSize = sizeof(cf);
+    cf.dwMask = CFM_COLOR;
+    cf.dwEffects = 0;  /* Clear CFE_AUTOCOLOR */
+    cf.crTextColor = g_ThemeColors.crForeground;
+    
+    /* Apply to existing text */
+    SendMessage(hwndEdit, EM_SETSEL, 0, nLen);
+    SendMessage(hwndEdit, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
+    
+    /* Set as default for new text */
+    SendMessage(hwndEdit, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
+    
+    /* RESTORE STATE */
+    
+    /* Restore selection */
+    SendMessage(hwndEdit, EM_SETSEL, dwSelStart, dwSelEnd);
+    
+    /* Restore scroll position */
+    SendMessage(hwndEdit, EM_SETSCROLLPOS, 0, (LPARAM)&ptScroll);
+    
+    /* Restore event mask */
+    SendMessage(hwndEdit, EM_SETEVENTMASK, 0, dwOldMask);
+    
+    /* Re-enable redraw LAST - single repaint */
+    SendMessage(hwndEdit, WM_SETREDRAW, TRUE, 0);
+    
+    /* Force single repaint */
+    InvalidateRect(hwndEdit, NULL, FALSE);
+    UpdateWindow(hwndEdit);
 }

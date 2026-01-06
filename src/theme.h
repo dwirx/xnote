@@ -75,4 +75,14 @@ void ApplyThemeToEdit(HWND hwndEdit);
 /* Get theme count for menu */
 int GetThemeCount(void);
 
+/* Contrast and luminance functions for accessibility */
+float GetRelativeLuminance(COLORREF cr);
+float CalculateContrastRatio(COLORREF crFg, COLORREF crBg);
+
+/* Light theme detection */
+BOOL IsLightTheme(ThemeType theme);
+
+/* Enhanced theme application (no flicker) */
+void ApplyThemeToEditNoFlicker(HWND hwndEdit);
+
 #endif /* THEME_H */

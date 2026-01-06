@@ -629,6 +629,8 @@ static BOOL LoadFileChunked(HWND hEdit, const TCHAR* szFileName, DWORD dwChunkSi
     WCHAR* pWideText = NULL;
     BOOL bSuccess = FALSE;
 
+    /* Note: Theme colors should already be applied by ReadFileContent before calling this */
+
     hFile = CreateFile(szFileName, GENERIC_READ, FILE_SHARE_READ, NULL,
                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
@@ -679,11 +681,50 @@ static BOOL LoadFileChunked(HWND hEdit, const TCHAR* szFileName, DWORD dwChunkSi
             if (nConverted > 0) {
                 pWideText[nConverted] = L'\0';
 
-                /* Set text directly - fast for chunks */
+                /* FLICKER-FREE LOADING for chunked files */
+                
+                /* STEP 1: Disable redraw FIRST */
                 SendMessage(hEdit, WM_SETREDRAW, FALSE, 0);
+                
+                /* Disable events during load */
+                DWORD dwOldMask = (DWORD)SendMessage(hEdit, EM_SETEVENTMASK, 0, 0);
+                
+                /* STEP 2: Set background color BEFORE text */
+                SendMessage(hEdit, EM_SETBKGNDCOLOR, 0, g_ThemeColors.crBackground);
+                
+                /* STEP 3: Set text content */
                 SetWindowTextW(hEdit, pWideText);
+                
+                /* STEP 4: Apply text color to all content */
+                {
+                    CHARFORMAT2 cf;
+                    ZeroMemory(&cf, sizeof(cf));
+                    cf.cbSize = sizeof(cf);
+                    cf.dwMask = CFM_COLOR;
+                    cf.dwEffects = 0;  /* Clear CFE_AUTOCOLOR */
+                    cf.crTextColor = g_ThemeColors.crForeground;
+                    
+                    /* Select all and apply color */
+                    SendMessage(hEdit, EM_SETSEL, 0, nConverted);
+                    SendMessage(hEdit, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
+                    
+                    /* Set default for new text */
+                    SendMessage(hEdit, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
+                }
+                
+                /* STEP 5: Position cursor at start and scroll to top */
+                SendMessage(hEdit, EM_SETSEL, 0, 0);
+                SendMessage(hEdit, WM_VSCROLL, SB_TOP, 0);
+                SendMessage(hEdit, EM_SCROLLCARET, 0, 0);
+                
+                /* Restore events */
+                SendMessage(hEdit, EM_SETEVENTMASK, 0, dwOldMask);
+                
+                /* STEP 6: Enable redraw LAST - single repaint */
                 SendMessage(hEdit, WM_SETREDRAW, TRUE, 0);
-                InvalidateRect(hEdit, NULL, TRUE);
+                
+                /* Force single complete repaint */
+                RedrawWindow(hEdit, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ERASE | RDW_FRAME);
 
                 *pdwLoaded = dwBytesRead;
                 bSuccess = TRUE;
@@ -701,15 +742,36 @@ BOOL ReadFileContent(HWND hEdit, const TCHAR* szFileName) {
     LARGE_INTEGER liFileSize;
     HANDLE hFile;
 
+    /* Extract filename for status bar */
+    const TCHAR* pDisplayName = _tcsrchr(szFileName, TEXT('\\'));
+    if (pDisplayName) pDisplayName++; else pDisplayName = szFileName;
+
+    /* Show loading status immediately */
+    if (g_AppState.hwndStatus) {
+        TCHAR szStatus[256];
+        _sntprintf(szStatus, 256, TEXT("Loading: %s"), pDisplayName);
+        SetWindowText(g_AppState.hwndStatus, szStatus);
+        UpdateWindow(g_AppState.hwndStatus);
+    }
+
+    /* Set background color ONLY to prevent white flash (don't touch text yet) */
+    SendMessage(hEdit, EM_SETBKGNDCOLOR, 0, g_ThemeColors.crBackground);
+
     /* Quick size check first */
     hFile = CreateFile(szFileName, GENERIC_READ, FILE_SHARE_READ, NULL,
                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
+        if (g_AppState.hwndStatus) {
+            SetWindowText(g_AppState.hwndStatus, TEXT("Error: Failed to open file"));
+        }
         return FALSE;
     }
 
     if (!GetFileSizeEx(hFile, &liFileSize)) {
         CloseHandle(hFile);
+        if (g_AppState.hwndStatus) {
+            SetWindowText(g_AppState.hwndStatus, TEXT("Error: Failed to get file size"));
+        }
         return FALSE;
     }
 
@@ -721,6 +783,22 @@ BOOL ReadFileContent(HWND hEdit, const TCHAR* szFileName) {
 
     /* Detect optimal loading mode based on file size */
     FileModeType fileMode = DetectOptimalFileMode(dwFileSize);
+
+    /* Update status with file size and mode */
+    if (g_AppState.hwndStatus) {
+        TCHAR szStatus[256];
+        const TCHAR* szMode = TEXT("");
+        switch (fileMode) {
+            case FILEMODE_PARTIAL: szMode = TEXT(" [Partial]"); break;
+            case FILEMODE_READONLY: szMode = TEXT(" [Read-Only]"); break;
+            case FILEMODE_MMAP: szMode = TEXT(" [Memory-Mapped]"); break;
+            default: break;
+        }
+        _sntprintf(szStatus, 256, TEXT("Loading: %s (%.2f MB)%s"), 
+                   pDisplayName, dwFileSize / (1024.0 * 1024.0), szMode);
+        SetWindowText(g_AppState.hwndStatus, szStatus);
+        UpdateWindow(g_AppState.hwndStatus);
+    }
 
     /* Show informative dialog for large files */
     if (fileMode != FILEMODE_NORMAL) {
@@ -916,7 +994,13 @@ BOOL ReadFileContent(HWND hEdit, const TCHAR* szFileName) {
      * 3. Update progress dialog
      * ========================================================================= */
 
-    /* Maximum performance settings for RichEdit */
+    /* ============================================================================
+     * FLICKER-FREE TEXT LOADING
+     * Critical: All operations must happen with redraw disabled
+     * Order: 1) Disable redraw, 2) Set colors, 3) Set text, 4) Enable redraw
+     * ========================================================================= */
+
+    /* STEP 1: Disable redraw FIRST - prevents any visual updates */
     SendMessage(hEdit, WM_SETREDRAW, FALSE, 0);
 
     /* Disable all event notifications during load */
@@ -928,57 +1012,44 @@ BOOL ReadFileContent(HWND hEdit, const TCHAR* szFileName) {
     /* Disable undo buffer during load for better performance */
     SendMessage(hEdit, EM_SETUNDOLIMIT, 0, 0);
 
-    /* For very small files (<500KB), use direct SetWindowText - fast enough */
-    if (g_ThreadData.dwWideLen < (500 * 1024 / sizeof(WCHAR))) {
-        SetWindowTextW(hEdit, g_ThreadData.pWideText);
-    } else {
-        /* For larger files, load in smaller chunks with message processing */
-        /* Use 10K characters per chunk for maximum responsiveness */
-        DWORD dwChunkChars = 10000; /* 10K characters per chunk - smaller = more responsive */
-        DWORD dwPos = 0;
-        DWORD dwTotal = g_ThreadData.dwWideLen;
-        DWORD dwLastUpdate = GetTickCount();
+    /* STEP 2: Set background color BEFORE adding text (prevents white flash) */
+    SendMessage(hEdit, EM_SETBKGNDCOLOR, 0, g_ThemeColors.crBackground);
+
+    /* STEP 3: Set the text content */
+    SetWindowTextW(hEdit, g_ThreadData.pWideText);
+
+    /* STEP 4: Apply text color to all content (while redraw still disabled) */
+    int nTextLen = GetWindowTextLength(hEdit);
+    if (nTextLen > 0) {
+        CHARFORMAT2 cf;
+        ZeroMemory(&cf, sizeof(cf));
+        cf.cbSize = sizeof(cf);
+        cf.dwMask = CFM_COLOR;
+        cf.dwEffects = 0;  /* Clear CFE_AUTOCOLOR */
+        cf.crTextColor = g_ThemeColors.crForeground;
         
-        /* Clear edit control first */
-        SetWindowTextW(hEdit, TEXT(""));
-        
-        while (dwPos < dwTotal) {
-            DWORD dwToAdd = min(dwChunkChars, dwTotal - dwPos);
-            
-            /* Temporarily null-terminate this chunk */
-            WCHAR chSaved = g_ThreadData.pWideText[dwPos + dwToAdd];
-            g_ThreadData.pWideText[dwPos + dwToAdd] = L'\0';
-            
-            /* Move cursor to end and append */
-            int nLen = GetWindowTextLength(hEdit);
-            SendMessage(hEdit, EM_SETSEL, nLen, nLen);
-            SendMessage(hEdit, EM_REPLACESEL, FALSE, (LPARAM)(g_ThreadData.pWideText + dwPos));
-            
-            /* Restore character */
-            g_ThreadData.pWideText[dwPos + dwToAdd] = chSaved;
-            
-            dwPos += dwToAdd;
-            
-            /* Update progress every 100ms to avoid UI overhead */
-            DWORD dwNow = GetTickCount();
-            if (hProgressDlg && IsWindow(hProgressDlg) && (dwNow - dwLastUpdate > 100)) {
-                int nPercent = (int)((dwPos * 100) / dwTotal);
-                SendDlgItemMessage(hProgressDlg, IDC_PROGRESS_BAR, PBM_SETPOS, nPercent, 0);
-                
-                TCHAR szProgress[128];
-                _sntprintf(szProgress, 128, TEXT("Loading into editor... %d%%"), nPercent);
-                SetDlgItemText(hProgressDlg, IDC_PROGRESS_TEXT, szProgress);
-                dwLastUpdate = dwNow;
-            }
-            
-            /* CRITICAL: Process Windows messages to prevent "Not Responding" */
-            MSG msg;
-            while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-                TranslateMessage(&msg);
-                DispatchMessage(&msg);
-            }
-        }
+        /* Select all and apply color */
+        SendMessage(hEdit, EM_SETSEL, 0, nTextLen);
+        SendMessage(hEdit, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
     }
+    
+    /* Also set default color for new text */
+    {
+        CHARFORMAT2 cf;
+        ZeroMemory(&cf, sizeof(cf));
+        cf.cbSize = sizeof(cf);
+        cf.dwMask = CFM_COLOR;
+        cf.dwEffects = 0;
+        cf.crTextColor = g_ThemeColors.crForeground;
+        SendMessage(hEdit, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
+    }
+
+    /* STEP 5: Position cursor at start */
+    SendMessage(hEdit, EM_SETSEL, 0, 0);
+    
+    /* Scroll to top */
+    SendMessage(hEdit, WM_VSCROLL, SB_TOP, 0);
+    SendMessage(hEdit, EM_SCROLLCARET, 0, 0);
 
     /* Re-enable undo with limit based on file size */
     if (dwFileSize > THRESHOLD_PARTIAL) {
@@ -988,17 +1059,21 @@ BOOL ReadFileContent(HWND hEdit, const TCHAR* szFileName) {
     }
     SendMessage(hEdit, EM_EMPTYUNDOBUFFER, 0, 0);
 
-    /* Position cursor at start */
-    SendMessage(hEdit, EM_SETSEL, 0, 0);
-    SendMessage(hEdit, EM_SCROLLCARET, 0, 0);
-
-    /* Re-enable events and redraw */
+    /* Re-enable events */
     SendMessage(hEdit, EM_SETEVENTMASK, 0, dwOldMask);
+
+    /* STEP 6: Enable redraw LAST - single repaint with everything ready */
     SendMessage(hEdit, WM_SETREDRAW, TRUE, 0);
 
-    /* Force immediate repaint */
-    InvalidateRect(hEdit, NULL, TRUE);
-    UpdateWindow(hEdit);
+    /* Force single complete repaint */
+    RedrawWindow(hEdit, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ERASE | RDW_FRAME);
+    
+    /* Process any pending messages */
+    MSG msg;
+    while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
 
     /* Close progress dialog if still open */
     if (hProgressDlg && IsWindow(hProgressDlg)) {
@@ -1009,6 +1084,27 @@ BOOL ReadFileContent(HWND hEdit, const TCHAR* szFileName) {
     pTab = GetCurrentTabState();
     if (pTab) {
         pTab->lineEnding = g_ThreadData.lineEnding;
+        pTab->dwLoadedSize = dwFileSize;
+    }
+
+    /* Update status bar with file statistics */
+    if (g_AppState.hwndStatus) {
+        int nLines = (int)SendMessage(hEdit, EM_GETLINECOUNT, 0, 0);
+        const TCHAR* szEncoding = TEXT("UTF-8");
+        const TCHAR* szLineEnding = TEXT("CRLF");
+        
+        if (pTab) {
+            switch (pTab->lineEnding) {
+                case LINE_ENDING_LF: szLineEnding = TEXT("LF"); break;
+                case LINE_ENDING_CR: szLineEnding = TEXT("CR"); break;
+                default: szLineEnding = TEXT("CRLF"); break;
+            }
+        }
+        
+        TCHAR szStatus[256];
+        _sntprintf(szStatus, 256, TEXT("Loaded: %.2f KB | %d lines | %s | %s"),
+                   dwFileSize / 1024.0, nLines, szEncoding, szLineEnding);
+        SetWindowText(g_AppState.hwndStatus, szStatus);
     }
 
     /* Cleanup */
@@ -1377,13 +1473,9 @@ BOOL FileOpen(HWND hwnd) {
     UpdateTabTitle(g_AppState.nCurrentTab);
     UpdateWindowTitle(hwnd);
 
-    /* Force redraw */
-    InvalidateRect(hwndEdit, NULL, TRUE);
-    UpdateWindow(hwndEdit);
-
-    /* Apply theme colors to ensure correct foreground color after loading text */
-    /* This is essential because SetWindowText inserts text with default (black) color */
-    ApplyThemeToEdit(hwndEdit);
+    /* Theme colors are already applied in ReadFileContent, no need to reapply here */
+    /* Just ensure the window is properly displayed */
+    RedrawWindow(hwndEdit, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ERASE | RDW_FRAME);
 
     /* Apply syntax highlighting AFTER display update for better responsiveness */
     /* Only for small files - large files skip highlighting for performance */
