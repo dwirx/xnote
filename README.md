@@ -1,252 +1,202 @@
-# XNote - Lightweight Text Editor for Windows
+# XNote
 
-A fast, lightweight text editor built with Win32 API featuring syntax highlighting, multiple tabs, line numbers, and Vim-style navigation.
+XNote is a lightweight Win32 text editor for Windows focused on fast startup, simple editing, and practical large-file handling. It includes tabs, Vim mode, syntax highlighting, drag and drop, sticky notes, session restore, and WSL-friendly cross-compilation.
 
-## Features
+## Highlights
 
-- Multiple tabs support
+- Multiple tabs with recent files and session restore
+- Vim mode with normal, insert, visual, command, and search flows
 - Syntax highlighting for 20+ languages
-- Line numbers (absolute or relative)
-- Vim mode navigation (toggleable)
-- Find and Replace
-- Word wrap toggle
-- Status bar with file info
+- Line numbers, relative line numbers, zoom, word wrap, and status bar details
+- Drag and drop file opening
+- Sticky notes support
+- Large-file protection with partial loading and read-only preview modes
+- Binary-file preflight checks to avoid opening obvious non-text files as text
 
-## Keyboard Shortcuts
+## Large File Behavior
 
-### File Operations
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+N | New document |
-| Ctrl+T | New tab |
-| Ctrl+O | Open file |
-| Ctrl+S | Save file |
-| Ctrl+Shift+S | Save As |
-| Ctrl+W | Close tab |
+XNote intentionally changes behavior as file size increases to keep the UI responsive:
 
-### Tab Navigation
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+Tab | Next tab |
-| Ctrl+Shift+Tab | Previous tab |
-| Ctrl+PageDown | Next tab |
-| Ctrl+PageUp | Previous tab |
-| Ctrl+1-9 | Go to tab 1-9 |
+- `< 50 MB`: normal editing mode
+- `50 MB - 200 MB`: partial loading mode, initial chunk loaded first, `F5` loads more
+- `200 MB - 1 GB`: read-only preview mode
+- `> 1 GB`: memory-mapped read-only preview
 
-### Edit Operations
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+Z | Undo |
-| Ctrl+X | Cut |
-| Ctrl+C | Copy |
-| Ctrl+V | Paste |
-| Ctrl+A | Select all |
-| Ctrl+D | Duplicate line |
-| Ctrl+Shift+K | Delete line |
-| Alt+Up | Move line up |
-| Alt+Down | Move line down |
-| Ctrl+/ | Toggle comment |
-| Tab | Indent |
-| Shift+Tab | Unindent |
-
-### Find & Navigation
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+F | Find |
-| Ctrl+H | Find and Replace |
-| F3 | Find next |
-| Ctrl+G | Go to line |
-
-### View Options
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+L | Toggle line numbers |
-| Ctrl++ | Zoom in |
-| Ctrl+- | Zoom out |
-| Ctrl+0 | Reset zoom |
-| Alt+Z | Toggle word wrap |
-| Ctrl+Shift+V | Toggle Vim mode |
-| F1 | Help / Shortcuts |
-
-## Vim Mode
-
-Enable via **View → Vim Mode** or `Ctrl+Shift+V`. Status bar shows current mode.
-
-### Command Mode (`:`)
-| Command | Action |
-|---------|--------|
-| `:w` | Save file |
-| `:q` | Close tab (fails if unsaved) |
-| `:q!` | Force close without saving |
-| `:wq` or `:x` | Save and close |
-| `:qa` | Close all tabs |
-| `:qa!` | Force close all |
-| `:e` | Open file |
-| `:new` | New tab |
-| `:tabnew` | New tab |
-| `:tabn` | Next tab |
-| `:tabp` | Previous tab |
-| `:{n}` | Go to line n |
-| `:set nu` | Show line numbers |
-| `:set nonu` | Hide line numbers |
-| `:set rnu` | Relative line numbers |
-| `:set wrap` | Enable word wrap |
-| `:set nowrap` | Disable word wrap |
-
-### Search Mode (`/` and `?`)
-| Key | Action |
-|-----|--------|
-| `/pattern` | Search forward (realtime preview) |
-| `?pattern` | Search backward (realtime preview) |
-| `n` | Next match |
-| `N` | Previous match |
-| `*` | Search word under cursor forward |
-| `#` | Search word under cursor backward |
-| `Esc` | Cancel search, return to original position |
-| `Enter` | Confirm search, stay at found position |
-
-Search features:
-- Realtime preview - results highlight as you type
-- Case-insensitive by default
-- Press `Esc` to cancel and return to original position
-- Press `Enter` to confirm, then use `n`/`N` to navigate
-
-### Tab Navigation (Vim)
-| Key | Action |
-|-----|--------|
-| `gt` | Next tab |
-| `gT` | Previous tab |
-| `{n}gt` | Go to tab n |
-| `g0` | First tab |
-| `g$` | Last tab |
-
-### Normal Mode - Navigation
-| Key | Action |
-|-----|--------|
-| h / ← | Move left |
-| j / ↓ | Move down |
-| k / ↑ | Move up |
-| l / → | Move right |
-| w / W | Next word |
-| b / B | Previous word |
-| e | End of word |
-| 0 | Line start |
-| $ | Line end |
-| ^ | First non-blank character |
-| gg | First line |
-| G | Last line |
-| {n}G | Go to line n |
-| H | Top of screen |
-| M | Middle of screen |
-| L | Bottom of screen |
-| f{char} | Find char forward on line |
-| F{char} | Find char backward on line |
-| t{char} | Till char forward |
-| T{char} | Till char backward |
-| % | Matching bracket |
-| { | Previous paragraph |
-| } | Next paragraph |
-| Ctrl+D | Half page down |
-| Ctrl+U | Half page up |
-| Page Up/Down | Scroll page |
-
-### Scroll View
-| Key | Action |
-|-----|--------|
-| zz | Center current line |
-| zt | Scroll current line to top |
-| zb | Scroll current line to bottom |
-
-### Normal Mode - Editing
-| Key | Action |
-|-----|--------|
-| x | Delete character |
-| X | Delete char before |
-| s | Delete char and insert |
-| S | Delete line and insert |
-| dd | Delete line |
-| dw | Delete word |
-| d$ | Delete to end of line |
-| d0 | Delete to start of line |
-| D | Delete to end of line |
-| cc | Change line |
-| cw | Change word |
-| C | Change to end of line |
-| yy | Yank (copy) line |
-| yw | Yank word |
-| Y | Yank line |
-| p | Paste after |
-| P | Paste before |
-| u | Undo |
-| Ctrl+R | Redo |
-| J | Join lines |
-| >> | Indent line |
-| << | Unindent line |
-
-### Mode Transitions
-| Key | Action |
-|-----|--------|
-| i | Insert mode (at cursor) |
-| a | Insert mode (after cursor) |
-| I | Insert at first non-blank |
-| A | Insert at line end |
-| o | New line below |
-| O | New line above |
-| v | Visual mode (character) |
-| V | Visual Line mode |
-| : | Command mode |
-| / | Search forward |
-| ? | Search backward |
-| Esc | Return to Normal mode |
-
-### Visual Mode (v)
-| Key | Action |
-|-----|--------|
-| h/j/k/l | Extend selection |
-| w/b/e | Extend by word |
-| 0/$/^ | Extend to line start/end |
-| G | Extend to end of file |
-| d/x | Delete selection |
-| y | Yank selection |
-| c | Change selection |
-| > | Indent selection |
-| < | Unindent selection |
-| V | Switch to Visual Line |
-| Esc | Exit visual mode |
-
-### Visual Line Mode (V)
-| Key | Action |
-|-----|--------|
-| j/k | Extend selection by line |
-| G | Extend to end of file |
-| d/x | Delete lines |
-| y | Yank lines |
-| c | Change lines |
-| > | Indent lines |
-| < | Unindent lines |
-| v | Switch to Visual (char) |
-| Esc | Exit visual mode |
-
-### Repeat Count
-Prefix commands with a number to repeat:
-- `5j` - Move down 5 lines
-- `3dd` - Delete 3 lines
-- `10G` - Go to line 10
-- `2>>` - Indent 2 times
+Syntax highlighting is also disabled automatically for large or high-line-count documents to avoid freezes.
 
 ## Supported Languages
 
 C, C++, Java, JavaScript, TypeScript, Python, Go, Rust, HTML, CSS, JSON, XML, YAML, SQL, PHP, Ruby, Shell, Batch, PowerShell, Markdown
 
-## Building
+## Build
 
-Requires MinGW-w64 with GCC:
+### Windows
+
+Requires MinGW-w64 with `gcc` and `windres`.
+
+```bat
+build.bat
+```
+
+Alternative Make targets in a Windows shell:
 
 ```bash
-make        # Build
-make clean  # Clean build files
-make run    # Build and run
+make
+make clean
+make rebuild
+make run
 ```
+
+### WSL Cross-Compile
+
+Install MinGW-w64 first, then build:
+
+```bash
+./build-wsl.sh build
+```
+
+Minimal alternative:
+
+```bash
+make -f Makefile.wsl
+```
+
+To run from WSL through Windows interop:
+
+```bash
+./build-wsl.sh run
+```
+
+### Warning-Free Verification
+
+For a stricter build that treats warnings as errors:
+
+```bash
+make -f Makefile.wsl clean all CFLAGS='-Wall -Wextra -Werror -O3 -DUNICODE -D_UNICODE'
+```
+
+## Installer
+
+After producing `xnote.exe`, build the NSIS installer on Windows:
+
+```bat
+installer\make_installer.bat
+```
+
+## Manual Verification
+
+There is no full automated test suite yet. Recommended checks:
+
+```bash
+bash benchmark/check_large_file_policy.sh
+make -f Makefile.wsl clean all
+```
+
+Manual smoke test:
+
+- Launch `xnote.exe sample.txt`
+- Open multiple tabs
+- Toggle Vim mode
+- Confirm status bar and line numbers stay in sync
+
+Large-file QA:
+
+- Open a file around `80 MB` and verify partial loading plus `F5`
+- Open a file around `300 MB` and verify read-only preview plus responsive UI
+
+## Keyboard Shortcuts
+
+### File
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+N` | New document |
+| `Ctrl+T` | New tab |
+| `Ctrl+O` | Open file |
+| `Ctrl+S` | Save |
+| `Ctrl+Shift+S` | Save As |
+| `Ctrl+W` | Close tab |
+
+### Navigation
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Tab` | Next tab |
+| `Ctrl+Shift+Tab` | Previous tab |
+| `Ctrl+PageDown` | Next tab |
+| `Ctrl+PageUp` | Previous tab |
+| `Ctrl+1-9` | Jump to tab |
+| `Ctrl+G` | Go to line |
+| `F3` | Find next |
+
+### Editing
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Z` | Undo |
+| `Ctrl+X` | Cut |
+| `Ctrl+C` | Copy |
+| `Ctrl+V` | Paste |
+| `Ctrl+A` | Select all |
+| `Ctrl+D` | Duplicate line |
+| `Ctrl+Shift+K` | Delete line |
+| `Alt+Up` | Move line up |
+| `Alt+Down` | Move line down |
+| `Ctrl+/` | Toggle comment |
+| `Tab` | Indent |
+| `Shift+Tab` | Unindent |
+
+### View
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+L` | Toggle line numbers |
+| `Ctrl++` | Zoom in |
+| `Ctrl+-` | Zoom out |
+| `Ctrl+0` | Reset zoom |
+| `Alt+Z` | Toggle word wrap |
+| `Ctrl+Shift+V` | Toggle Vim mode |
+| `F1` | Help |
+| `F5` | Load more content in partial mode |
+
+## Vim Mode
+
+Enable Vim mode from the View menu or with `Ctrl+Shift+V`.
+
+Common commands:
+
+- `:w` save
+- `:q` close tab if clean
+- `:q!` force close
+- `:wq` or `:x` save and close
+- `:e` open file
+- `:tabn` and `:tabp` switch tabs
+- `:set nu`, `:set nonu`, `:set rnu`
+- `/pattern`, `?pattern`, `n`, `N`
+
+Common motions:
+
+- `h j k l`
+- `w b e`
+- `0 $ ^`
+- `gg G`
+- `f<char>` `F<char>` `t<char>` `T<char>`
+- `zz` `zt` `zb`
+
+Common edits:
+
+- `dd` delete line
+- `yy` yank line
+- `p` and `P` paste
+- `dw` delete word
+- `cw` change word
+- `>>` and `<<` indent or unindent
+
+## Repository Notes
+
+- Vendor code in `lib/` should be treated as external
+- Build artifacts like `xnote.exe`, `build/`, and installer binaries should not be committed
+- See `AGENTS.md` for repository-specific development guidance
 
 ## License
 

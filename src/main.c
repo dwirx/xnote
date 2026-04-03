@@ -1205,9 +1205,13 @@ void SwitchToTab(HWND hwnd, int nTabIndex) {
         /* This is essential because RichEdit may lose color formatting */
         ApplyThemeToEdit(pTab->hwndEdit);
         
-        /* ALWAYS apply syntax highlighting for code files */
-        /* This ensures colors are correct even after multiple tab switches */
-        if (g_bSyntaxHighlight && pTab->language != LANG_NONE) {
+        /* Re-apply syntax colors only when the loaded document policy allows it. */
+        if (g_bSyntaxHighlight &&
+            pTab->language != LANG_NONE &&
+            ShouldEnableSyntaxHighlighting(
+                pTab->dwTotalFileSize,
+                (int)SendMessage(pTab->hwndEdit, EM_GETLINECOUNT, 0, 0),
+                pTab->fileMode)) {
             ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
         }
         pTab->bNeedsSyntaxRefresh = FALSE;
@@ -1722,11 +1726,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         TabState* pTabItem = &g_AppState.tabs[i];
                         if (pTabItem->hwndEdit) {
                             if (g_bSyntaxHighlight) {
-                                /* Skip syntax for large files (Requirement 5.1) */
-                                if (pTabItem->dwTotalFileSize > THRESHOLD_SYNTAX_OFF) {
+                                pTabItem->language = DetectLanguage(pTabItem->szFileName);
+                                if (!ShouldEnableSyntaxHighlighting(
+                                        pTabItem->dwTotalFileSize,
+                                        (int)SendMessage(pTabItem->hwndEdit, EM_GETLINECOUNT, 0, 0),
+                                        pTabItem->fileMode)) {
                                     continue;
                                 }
-                                pTabItem->language = DetectLanguage(pTabItem->szFileName);
                                 ApplySyntaxHighlighting(pTabItem->hwndEdit, pTabItem->language);
                             } else {
                                 /* Reset to default theme color */
@@ -2184,12 +2190,18 @@ void OpenRecentFile(HWND hwnd, int nIndex) {
         if (ReadFileContent(pTab->hwndEdit, pTab->szFileName)) {
             pTab->bModified = FALSE;
             pTab->language = DetectLanguage(pTab->szFileName);
-            if (g_bSyntaxHighlight) {
+            if (g_bSyntaxHighlight &&
+                pTab->language != LANG_NONE &&
+                ShouldEnableSyntaxHighlighting(
+                    pTab->dwTotalFileSize,
+                    (int)SendMessage(pTab->hwndEdit, EM_GETLINECOUNT, 0, 0),
+                    pTab->fileMode)) {
                 ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
             }
             UpdateTabGroup(g_AppState.nCurrentTab);
             UpdateTabTitle(g_AppState.nCurrentTab);
             UpdateWindowTitle(hwnd);
+            UpdateStatusBar(hwnd);
             AddRecentFile(pTab->szFileName);
         }
     } else {
@@ -2204,12 +2216,18 @@ void OpenRecentFile(HWND hwnd, int nIndex) {
             if (ReadFileContent(pTab->hwndEdit, pTab->szFileName)) {
                 pTab->bModified = FALSE;
                 pTab->language = DetectLanguage(pTab->szFileName);
-                if (g_bSyntaxHighlight) {
+                if (g_bSyntaxHighlight &&
+                    pTab->language != LANG_NONE &&
+                    ShouldEnableSyntaxHighlighting(
+                        pTab->dwTotalFileSize,
+                        (int)SendMessage(pTab->hwndEdit, EM_GETLINECOUNT, 0, 0),
+                        pTab->fileMode)) {
                     ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
                 }
                 UpdateTabGroup(nTab);
                 UpdateTabTitle(nTab);
                 UpdateWindowTitle(hwnd);
+                UpdateStatusBar(hwnd);
                 AddRecentFile(pTab->szFileName);
             }
         }
@@ -2256,7 +2274,8 @@ void ToggleDistractionFreeMode(HWND hwnd) {
         
         /* Go fullscreen */
         HMONITOR hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-        MONITORINFO mi = {sizeof(mi)};
+        MONITORINFO mi = {0};
+        mi.cbSize = sizeof(mi);
         GetMonitorInfo(hMon, &mi);
         SetWindowPos(hwnd, HWND_TOPMOST, 
                      mi.rcMonitor.left, mi.rcMonitor.top,
@@ -2636,12 +2655,15 @@ static void OpenCommandLineFile(HWND hwnd) {
         extern BOOL g_bSyntaxHighlight;
         
         pTab->language = DetectLanguage(g_szCmdLineFile);
-        if (g_bSyntaxHighlight && pTab->language != LANG_NONE) {
-            /* Only apply syntax highlighting for small files */
-            if (pTab->dwTotalFileSize < THRESHOLD_SYNTAX_OFF) {
-                ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
-            }
+        if (g_bSyntaxHighlight &&
+            pTab->language != LANG_NONE &&
+            ShouldEnableSyntaxHighlighting(
+                pTab->dwTotalFileSize,
+                (int)SendMessage(pTab->hwndEdit, EM_GETLINECOUNT, 0, 0),
+                pTab->fileMode)) {
+            ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
         }
+        UpdateStatusBar(hwnd);
     } else {
         /* Failed to read file */
         TCHAR szError[MAX_PATH + 64];

@@ -44,8 +44,16 @@ void MemPool_Free(MemoryPool* pPool, LPVOID pMem) {
 DWORD MemPool_GetUsage(MemoryPool* pPool) { return pPool && pPool->bInitialized ? pPool->dwUsedSize : 0; }
 BOOL MemPool_IsNearLimit(MemoryPool* pPool) { return pPool && pPool->bInitialized && pPool->dwUsedSize >= MEMPOOL_WARN_THRESHOLD; }
 void MemPool_GetStats(MemoryPool* pPool, DWORD* u, DWORD* t, DWORD* c) {
-    if (!pPool || !pPool->bInitialized) { if(u)*u=0; if(t)*t=0; if(c)*c=0; return; }
-    if(u)*u=pPool->dwUsedSize; if(t)*t=pPool->dwPoolSize; if(c)*c=pPool->dwAllocCount;
+    if (!pPool || !pPool->bInitialized) {
+        if (u) *u = 0;
+        if (t) *t = 0;
+        if (c) *c = 0;
+        return;
+    }
+
+    if (u) *u = pPool->dwUsedSize;
+    if (t) *t = pPool->dwPoolSize;
+    if (c) *c = pPool->dwAllocCount;
 }
 
 BOOL IOCP_Initialize(IOCPManager* pMgr) {

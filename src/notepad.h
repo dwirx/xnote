@@ -62,11 +62,11 @@ typedef enum {
     FILEMODE_MMAP                /* Memory-mapped mode (>1GB) */
 } FileModeType;
 
-/* Large file threshold constants - OPTIMIZED for better responsiveness */
+/* Large file threshold constants */
 #define THRESHOLD_PROGRESS      (1 * 1024 * 1024)       /* 1MB - show progress dialog */
-#define THRESHOLD_PARTIAL       (2 * 1024 * 1024)       /* 2MB - switch to partial mode */
-#define THRESHOLD_READONLY      (10 * 1024 * 1024)      /* 10MB - switch to read-only */
-#define THRESHOLD_MMAP          (50 * 1024 * 1024)      /* 50MB - switch to memory-mapped */
+#define THRESHOLD_PARTIAL       (50 * 1024 * 1024)      /* 50MB - switch to partial mode */
+#define THRESHOLD_READONLY      (200 * 1024 * 1024)     /* 200MB - switch to read-only */
+#define THRESHOLD_MMAP          (1024 * 1024 * 1024)    /* 1GB - switch to memory-mapped */
 #define THRESHOLD_SYNTAX_OFF    (256 * 1024)            /* 256KB - disable syntax highlighting */
 #define THRESHOLD_LINE_SYNTAX   5000                     /* 5000 lines - disable syntax */
 
@@ -150,6 +150,7 @@ void UpdateWindowTitle(HWND hwnd);
 
 /* Large file operations */
 FileModeType DetectOptimalFileMode(DWORD dwFileSize);
+BOOL ShouldEnableSyntaxHighlighting(DWORD dwFileSize, int nLineCount, FileModeType fileMode);
 BOOL LoadFileWithMode(HWND hwnd, const TCHAR* szFileName, FileModeType forcedMode);
 BOOL LoadMoreContent(HWND hwnd);
 void ShowLargeFileInfo(HWND hwnd, DWORD dwFileSize, FileModeType mode);

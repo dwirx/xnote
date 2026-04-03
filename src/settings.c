@@ -237,8 +237,16 @@ void RestoreSession(HWND hwnd) {
             if (ReadFileContent(pTab->hwndEdit, pTab->szFileName)) {
                 pTab->bModified = FALSE;
                 pTab->language = DetectLanguage(pTab->szFileName);
-                if (g_bSyntaxHighlight) { ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language); }
+                if (g_bSyntaxHighlight &&
+                    pTab->language != LANG_NONE &&
+                    ShouldEnableSyntaxHighlighting(
+                        pTab->dwTotalFileSize,
+                        (int)SendMessage(pTab->hwndEdit, EM_GETLINECOUNT, 0, 0),
+                        pTab->fileMode)) {
+                    ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
+                }
                 UpdateTabTitle(0); UpdateWindowTitle(hwnd);
+                UpdateStatusBar(hwnd);
                 AddRecentFile(pTab->szFileName); nRestoredCount++;
             }
             bFirstFile = FALSE;
@@ -253,8 +261,16 @@ void RestoreSession(HWND hwnd) {
                 if (ReadFileContent(pTab->hwndEdit, pTab->szFileName)) {
                     pTab->bModified = FALSE;
                     pTab->language = DetectLanguage(pTab->szFileName);
-                    if (g_bSyntaxHighlight) { ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language); }
+                    if (g_bSyntaxHighlight &&
+                        pTab->language != LANG_NONE &&
+                        ShouldEnableSyntaxHighlighting(
+                            pTab->dwTotalFileSize,
+                            (int)SendMessage(pTab->hwndEdit, EM_GETLINECOUNT, 0, 0),
+                            pTab->fileMode)) {
+                        ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
+                    }
                     UpdateTabTitle(nTab);
+                    UpdateStatusBar(hwnd);
                     AddRecentFile(pTab->szFileName); nRestoredCount++;
                 }
             }

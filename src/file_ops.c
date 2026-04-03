@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <richedit.h>
 
+static BOOL g_bAllowBinaryOpenOnce = FALSE;
+
 /* Update window title based on current tab */
 void UpdateWindowTitle(HWND hwnd) {
     TCHAR szTitle[MAX_PATH + 64];
@@ -200,14 +202,6 @@ static BOOL IsKnownBinaryExtension(const TCHAR* szFilePath) {
     if (_tcscmp(szExt, TEXT(".tar")) == 0) return TRUE;
     if (_tcscmp(szExt, TEXT(".gz")) == 0) return TRUE;
 
-    /* Office documents (binary/zipped) */
-    if (_tcscmp(szExt, TEXT(".docx")) == 0) return TRUE;
-    if (_tcscmp(szExt, TEXT(".xlsx")) == 0) return TRUE;
-    if (_tcscmp(szExt, TEXT(".pptx")) == 0) return TRUE;
-    if (_tcscmp(szExt, TEXT(".doc")) == 0) return TRUE;
-    if (_tcscmp(szExt, TEXT(".xls")) == 0) return TRUE;
-    if (_tcscmp(szExt, TEXT(".ppt")) == 0) return TRUE;
-
     /* Database files */
     if (_tcscmp(szExt, TEXT(".db")) == 0) return TRUE;
     if (_tcscmp(szExt, TEXT(".sqlite")) == 0) return TRUE;
@@ -253,24 +247,24 @@ static LineEndingType DetectLineEnding(const char* pBuffer, DWORD dwSize) {
  * Automatically selects the best loading strategy based on file size:
  * (Thresholds optimized for responsiveness - prevents "Not Responding")
  *
- * FILEMODE_NORMAL (< 2MB):
+ * FILEMODE_NORMAL (< 50MB):
  *   - Full file loaded into RichEdit
  *   - All features enabled (syntax highlighting for <256KB, editing, etc.)
  *   - Best user experience
  *
- * FILEMODE_PARTIAL (2MB - 10MB):
+ * FILEMODE_PARTIAL (50MB - 200MB):
  *   - Load first 512KB initially
  *   - Show "Load More" / F5 for remaining content
  *   - Editing enabled, syntax highlighting disabled
  *   - Good balance of performance and usability
  *
- * FILEMODE_READONLY (10MB - 50MB):
+ * FILEMODE_READONLY (200MB - 1GB):
  *   - Read-only preview mode
  *   - Load first 512KB for preview
  *   - View-only, no editing
  *   - Fast loading, minimal memory
  *
- * FILEMODE_MMAP (> 50MB):
+ * FILEMODE_MMAP (> 1GB):
  *   - Memory-mapped file (no load into RAM)
  *   - Virtual scrolling
  *   - Ultra-fast opening
@@ -280,18 +274,24 @@ static LineEndingType DetectLineEnding(const char* pBuffer, DWORD dwSize) {
 /* Public function for file mode detection - uses threshold constants from notepad.h */
 FileModeType DetectOptimalFileMode(DWORD dwFileSize) {
     if (dwFileSize < THRESHOLD_PARTIAL) {
-        /* < 2MB: Normal mode - full experience */
+        /* < 50MB: Normal mode - full experience */
         return FILEMODE_NORMAL;
     } else if (dwFileSize < THRESHOLD_READONLY) {
-        /* 2MB - 10MB: Partial loading mode */
+        /* 50MB - 200MB: Partial loading mode */
         return FILEMODE_PARTIAL;
     } else if (dwFileSize < THRESHOLD_MMAP) {
-        /* 10MB - 50MB: Read-only preview mode */
+        /* 200MB - 1GB: Read-only preview mode */
         return FILEMODE_READONLY;
     } else {
-        /* > 50MB: Memory-mapped mode */
+        /* > 1GB: Memory-mapped mode */
         return FILEMODE_MMAP;
     }
+}
+
+BOOL ShouldEnableSyntaxHighlighting(DWORD dwFileSize, int nLineCount, FileModeType fileMode) {
+    return (fileMode == FILEMODE_NORMAL) &&
+           (dwFileSize < THRESHOLD_SYNTAX_OFF) &&
+           (nLineCount < THRESHOLD_LINE_SYNTAX);
 }
 
 /* Show informative message about large file mode */
@@ -573,41 +573,6 @@ static DWORD WINAPI FileLoadThreadProc(LPVOID lpParam) {
     return 0;
 }
 
-/* Memory stream structure for EM_STREAMIN with progress tracking */
-typedef struct {
-    WCHAR* pText;
-    DWORD dwSize;
-    DWORD dwPos;
-    HWND hwndProgress;      /* Progress dialog handle */
-    volatile DWORD* pProgress; /* Progress percentage (0-100) */
-    DWORD dwTotalSize;      /* Total size for progress calculation */
-} MEMORY_STREAM;
-
-/* Stream callback function - feeds text from memory buffer to RichEdit with progress updates */
-static DWORD CALLBACK MemoryStreamCallback(DWORD_PTR dwCookie, LPBYTE pbBuff, LONG cb, LONG* pcb) {
-    MEMORY_STREAM* pStream = (MEMORY_STREAM*)dwCookie;
-
-    DWORD dwRemaining = pStream->dwSize - pStream->dwPos;
-    DWORD dwToRead = (DWORD)cb;
-    if (dwToRead > dwRemaining) {
-        dwToRead = dwRemaining;
-    }
-
-    if (dwToRead > 0) {
-        memcpy(pbBuff, (BYTE*)pStream->pText + pStream->dwPos, dwToRead);
-        pStream->dwPos += dwToRead;
-
-        /* Update progress if streaming is taking time */
-        if (pStream->pProgress && pStream->dwTotalSize > 0) {
-            DWORD dwProgress = (pStream->dwPos * 100) / pStream->dwTotalSize;
-            *pStream->pProgress = dwProgress;
-        }
-    }
-
-    *pcb = (LONG)dwToRead;
-    return 0; /* Success */
-}
-
 /* ============================================================================
  * REVOLUTIONARY SMART FILE LOADING SYSTEM
  * ============================================================================
@@ -741,6 +706,10 @@ static BOOL LoadFileChunked(HWND hEdit, const TCHAR* szFileName, DWORD dwChunkSi
 BOOL ReadFileContent(HWND hEdit, const TCHAR* szFileName) {
     LARGE_INTEGER liFileSize;
     HANDLE hFile;
+    char buffer[8192];
+    DWORD dwBytesRead = 0;
+    BOOL bAllowBinaryOpen = g_bAllowBinaryOpenOnce;
+    g_bAllowBinaryOpenOnce = FALSE;
 
     /* Extract filename for status bar */
     const TCHAR* pDisplayName = _tcsrchr(szFileName, TEXT('\\'));
@@ -778,6 +747,25 @@ BOOL ReadFileContent(HWND hEdit, const TCHAR* szFileName) {
     /* Support files up to 4GB (handle LARGE_INTEGER properly) */
     DWORD dwFileSize = liFileSize.LowPart;
     BOOL bIsVeryLarge = (liFileSize.HighPart > 0) || (dwFileSize > 1024 * 1024 * 1024);
+
+    /* Reject obviously binary files before loading them into the editor. */
+    if (!bAllowBinaryOpen && IsKnownBinaryExtension(szFileName)) {
+        CloseHandle(hFile);
+        ShowErrorDialog(GetParent(hEdit), TEXT("This file format is binary and cannot be opened as text."));
+        return FALSE;
+    }
+
+    if (dwFileSize > 0) {
+        SetFilePointer(hFile, 0, NULL, FILE_BEGIN);
+        if (ReadFile(hFile, buffer, sizeof(buffer), &dwBytesRead, NULL) &&
+            dwBytesRead > 0 &&
+            !bAllowBinaryOpen &&
+            IsBinaryFile(buffer, dwBytesRead)) {
+            CloseHandle(hFile);
+            ShowErrorDialog(GetParent(hEdit), TEXT("This file appears to be binary and cannot be opened as text."));
+            return FALSE;
+        }
+    }
 
     CloseHandle(hFile);
 
@@ -1425,6 +1413,7 @@ BOOL FileOpen(HWND hwnd) {
             return FALSE; /* User cancelled */
         }
         /* User wants to open as raw text - continue */
+        g_bAllowBinaryOpenOnce = TRUE;
     }
     
     /* Get current tab */
@@ -1493,14 +1482,7 @@ BOOL FileOpen(HWND hwnd) {
     /* Check line count for syntax threshold */
     int nLineCount = (int)SendMessage(hwndEdit, EM_GETLINECOUNT, 0, 0);
 
-    /* Disable syntax highlighting for:
-     * - Files > 256KB (THRESHOLD_SYNTAX_OFF)
-     * - Files with > 5000 lines (THRESHOLD_LINE_SYNTAX)
-     * - Files in non-normal mode (partial, readonly, mmap)
-     */
-    BOOL bEnableSyntax = (dwFileSize < THRESHOLD_SYNTAX_OFF) && 
-                         (nLineCount < THRESHOLD_LINE_SYNTAX) &&
-                         (pTab->fileMode == FILEMODE_NORMAL);
+    BOOL bEnableSyntax = ShouldEnableSyntaxHighlighting(dwFileSize, nLineCount, pTab->fileMode);
 
     if (g_bSyntaxHighlight && pTab->language != LANG_NONE && bEnableSyntax) {
         SetWindowText(g_AppState.hwndStatus, TEXT("Applying syntax highlighting..."));

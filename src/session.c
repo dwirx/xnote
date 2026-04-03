@@ -666,12 +666,22 @@ BOOL LoadSession(HWND hwnd) {
                 _tcscpy(pTab->szFileName, pSessionTab->szFilePath);
                 pTab->bUntitled = FALSE;
                 pTab->language = pSessionTab->language;
+
+                if (g_bSyntaxHighlight &&
+                    pTab->language != LANG_NONE &&
+                    ShouldEnableSyntaxHighlighting(
+                        pTab->dwTotalFileSize,
+                        (int)SendMessage(pTab->hwndEdit, EM_GETLINECOUNT, 0, 0),
+                        pTab->fileMode)) {
+                    ApplySyntaxHighlighting(pTab->hwndEdit, pTab->language);
+                }
                 
                 /* Restore cursor and scroll position */
                 SendMessage(pTab->hwndEdit, EM_SETSEL, pSessionTab->nSelStart, pSessionTab->nSelEnd);
                 SendMessage(pTab->hwndEdit, EM_LINESCROLL, 0, pSessionTab->nScrollPos);
                 
                 UpdateTabTitle(nNewTab);
+                UpdateStatusBar(hwnd);
             }
         }
     }
